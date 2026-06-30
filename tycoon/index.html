@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tiki Bar Tycoon">
+<meta name="theme-color" content="#241810">
+<title>Tiki Bar Tycoon</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;}
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none;background:#1b1208;
+    font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;color:#fff;}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background:radial-gradient(130% 80% at 50% 0%,#4a3620 0%,#2a1c10 55%,#160e07 100%);}
+  /* HUD */
+  #hud{flex:0 0 auto;text-align:center;padding:14px 12px 10px;position:relative;
+    background:linear-gradient(180deg,rgba(90,58,28,.55),rgba(40,24,12,0));}
+  #hud .coins{font-size:clamp(34px,9vw,52px);font-weight:800;color:#ffd23f;
+    text-shadow:0 2px 0 #a85c12,0 4px 10px rgba(0,0,0,.5);line-height:1;}
+  #hud .coins .unit{font-size:.6em;}
+  #hud .rates{margin-top:6px;font-size:clamp(13px,3.6vw,16px);color:#ffe9c7;opacity:.95;font-weight:700;}
+  #hud .rates .sep{opacity:.45;margin:0 4px;}
+  #tokwrap{color:#ff9ad2;}
+  /* Bar / tap zone */
+  #bar{flex:0 0 auto;margin:6px 14px 4px;border-radius:22px;position:relative;overflow:hidden;
+    background:linear-gradient(180deg,#caa05f,#9c6f3c);box-shadow:inset 0 2px 0 rgba(255,235,190,.4),0 6px 16px rgba(0,0,0,.4);}
+  #bar .scene{display:flex;align-items:flex-end;justify-content:center;gap:8px;font-size:40px;
+    padding:14px 0 6px;filter:drop-shadow(0 4px 4px rgba(0,0,0,.25));}
+  #bar .scene span{display:inline-block;animation:bob 2.4s ease-in-out infinite;}
+  #bar .scene span:nth-child(2){animation-delay:.3s;font-size:54px;}
+  #bar .scene span:nth-child(3){animation-delay:.6s;}
+  #bar .scene span:nth-child(4){animation-delay:.15s;}
+  #bar .scene span:nth-child(5){animation-delay:.45s;}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+  #serveBtn{display:block;width:calc(100% - 28px);margin:0 14px 14px;border:none;cursor:pointer;
+    padding:16px;border-radius:16px;font-size:20px;font-weight:800;letter-spacing:.5px;color:#5a2f12;
+    background:linear-gradient(180deg,#ffe07a,#ff9f1c);box-shadow:0 5px 0 #b86a12,0 8px 16px rgba(0,0,0,.4);
+    transition:transform .05s,box-shadow .05s;}
+  #serveBtn:active{transform:translateY(4px);box-shadow:0 1px 0 #b86a12,0 3px 8px rgba(0,0,0,.4);}
+  /* Tabs */
+  #tabs{flex:0 0 auto;display:flex;gap:6px;padding:0 14px 8px;}
+  #tabs button{flex:1;position:relative;border:none;cursor:pointer;padding:11px 4px;border-radius:12px 12px 0 0;
+    font-size:15px;font-weight:800;color:#ffe9c7;background:rgba(255,255,255,.08);}
+  #tabs button.active{background:rgba(255,255,255,.16);color:#fff;box-shadow:inset 0 -3px 0 #ffd23f;}
+  #tabs .dot{position:absolute;top:6px;right:10px;width:9px;height:9px;border-radius:50%;background:#ff5a5f;
+    box-shadow:0 0 0 2px rgba(0,0,0,.25);}
+  /* Panels */
+  .panel{flex:1 1 auto;overflow-y:auto;padding:6px 12px 18px;-webkit-overflow-scrolling:touch;}
+  .row{display:flex;align-items:center;gap:11px;background:rgba(255,255,255,.07);border-radius:14px;
+    padding:10px 12px;margin-bottom:9px;border:1px solid rgba(255,255,255,.06);}
+  .row .emoji{font-size:34px;width:46px;text-align:center;flex:0 0 auto;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3));}
+  .row .info{flex:1 1 auto;min-width:0;}
+  .row .nm{font-weight:800;font-size:15px;}
+  .row .sub{font-size:12px;color:#ffe9c7;opacity:.8;margin-top:2px;}
+  .row .own{font-size:26px;font-weight:800;color:#ffd23f;min-width:30px;text-align:center;opacity:.95;}
+  .buy{border:none;cursor:pointer;border-radius:11px;padding:9px 12px;min-width:96px;font-weight:800;font-size:14px;
+    color:#3a1f0c;background:linear-gradient(180deg,#ffe07a,#ffb02c);box-shadow:0 3px 0 #b86a12;line-height:1.15;}
+  .buy .c{display:block;font-size:12px;font-weight:700;}
+  .buy:active{transform:translateY(2px);box-shadow:0 1px 0 #b86a12;}
+  .buy:disabled{filter:grayscale(.7) brightness(.7);box-shadow:0 3px 0 #5a3a1c;cursor:default;}
+  .up .nm{color:#fff;}
+  .up .sub{color:#bfe9c7;opacity:.95;}
+  .panel .empty{opacity:.6;text-align:center;padding:30px 10px;font-size:14px;}
+  .sectitle{font-size:12px;letter-spacing:1px;font-weight:800;color:#ffd9a0;opacity:.8;margin:4px 2px 8px;text-transform:uppercase;}
+  /* Prestige */
+  #prestige .pcard{background:rgba(255,255,255,.07);border-radius:16px;padding:18px;text-align:center;}
+  #prestige h2{color:#ff9ad2;font-size:24px;margin-bottom:8px;}
+  #prestige p{font-size:14px;line-height:1.55;color:#ffe9c7;opacity:.92;margin-bottom:10px;}
+  #prestige .big{font-size:40px;font-weight:800;color:#ffd23f;margin:6px 0;}
+  #renovateBtn{border:none;cursor:pointer;border-radius:14px;padding:14px 22px;font-size:18px;font-weight:800;color:#3a1f0c;
+    background:linear-gradient(180deg,#ff9ad2,#e23e8c);box-shadow:0 5px 0 #9c2360;}
+  #renovateBtn:disabled{filter:grayscale(.6) brightness(.7);box-shadow:0 5px 0 #5a3a4c;cursor:default;}
+  /* float numbers */
+  #floatLayer{position:fixed;inset:0;pointer-events:none;z-index:40;overflow:hidden;}
+  .float{position:absolute;font-weight:800;color:#ffd23f;font-size:22px;text-shadow:0 2px 4px rgba(0,0,0,.5);
+    animation:floatUp 1s ease-out forwards;}
+  @keyframes floatUp{0%{opacity:1;transform:translateY(0) scale(.8)}20%{transform:translateY(-8px) scale(1.1)}
+    100%{opacity:0;transform:translateY(-70px) scale(1)}}
+  /* corner buttons */
+  .corner{position:fixed;top:calc(12px + env(safe-area-inset-top));z-index:30;width:42px;height:42px;border-radius:50%;
+    border:none;cursor:pointer;font-size:20px;line-height:42px;text-align:center;background:rgba(0,0,0,.35);color:#fff;}
+  #mute{right:12px;} #menuBtn{right:60px;}
+  /* modals */
+  .modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:26px;
+    background:rgba(15,9,4,.74);backdrop-filter:blur(3px);}
+  .modal .box{max-width:380px;width:100%;background:linear-gradient(180deg,#3a2614,#241710);border-radius:20px;
+    padding:24px;text-align:center;box-shadow:0 16px 40px rgba(0,0,0,.6);border:1px solid rgba(255,210,150,.2);}
+  .modal h2{color:#ffd23f;font-size:26px;margin-bottom:10px;}
+  .modal p{font-size:15px;line-height:1.6;color:#ffe9c7;margin-bottom:8px;}
+  .modal .reward{font-size:30px;font-weight:800;color:#ffd23f;margin:10px 0;}
+  .modal .btn{border:none;cursor:pointer;border-radius:14px;padding:13px 26px;font-size:18px;font-weight:800;color:#5a2f12;
+    background:linear-gradient(180deg,#ffe07a,#ff9f1c);box-shadow:0 5px 0 #b86a12;margin-top:10px;}
+  .modal .btn.ghost{background:rgba(255,255,255,.12);color:#ffe9c7;box-shadow:none;font-size:14px;padding:10px 18px;}
+  .modal .menu-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px;}
+  .hidden{display:none!important;}
+  .credit{margin-top:14px;font-size:11px;color:#ffffff55;}
+</style>
+</head>
+<body>
+<a href="../" aria-label="Back to menu" style="position:fixed;z-index:60;top:calc(12px + env(safe-area-inset-top));left:12px;width:42px;height:42px;border-radius:50%;border:none;background:rgba(0,0,0,.42);color:#fff;font:700 24px/42px system-ui,sans-serif;text-align:center;text-decoration:none;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)">‹</a>
+<div id="app">
+  <header id="hud">
+    <div class="coins"><span id="coins">0</span> <span class="unit">💰</span></div>
+    <div class="rates">
+      <span id="cps">0</span> /sec
+      <span class="sep">·</span>
+      <span id="tap">+1</span> /tap
+      <span id="tokwrap" class="hidden"><span class="sep">·</span><span id="tok">0</span> 🌺</span>
+    </div>
+  </header>
+
+  <div id="bar">
+    <div class="scene"><span>🌴</span><span>🍹</span><span>🍍</span><span>🍸</span><span>🌺</span></div>
+  </div>
+  <button id="serveBtn">TAP TO SERVE 🍹</button>
+
+  <nav id="tabs">
+    <button data-tab="stations" class="active">Bar</button>
+    <button data-tab="upgrades">Boosts<span id="upDot" class="dot hidden"></span></button>
+    <button data-tab="prestige">Renovate</button>
+  </nav>
+
+  <section id="stations" class="panel"></section>
+  <section id="upgrades" class="panel hidden"></section>
+  <section id="prestige" class="panel hidden"></section>
+</div>
+
+<div id="floatLayer"></div>
+<button id="mute" class="corner" title="Mute">🔊</button>
+<button id="menuBtn" class="corner" title="Menu">⚙</button>
+
+<div id="away" class="modal hidden"><div class="box">
+  <h2>Welcome back! 🌴</h2>
+  <p id="awayTime"></p>
+  <div class="reward" id="awayCoins"></div>
+  <p style="opacity:.7;font-size:13px">Your bar kept serving while you were gone.</p>
+  <button class="btn" id="awayOk">Collect</button>
+</div></div>
+
+<div id="menu" class="modal hidden"><div class="box">
+  <h2>Tiki Bar Tycoon</h2>
+  <p style="font-size:13px;opacity:.85">A cozy offline idle bar. Your progress saves automatically on this device.</p>
+  <p id="statLine" style="font-size:13px;opacity:.8;margin-top:8px"></p>
+  <div class="menu-row">
+    <button class="btn ghost" id="closeMenu">Close</button>
+    <button class="btn ghost" id="wipe">Reset save</button>
+  </div>
+  <div class="credit">Made with love 🌺</div>
+</div></div>
+
+<script>
+(() => {
+"use strict";
+
+// ---------- data ----------
+const STATIONS = [
+  { id:'lemon',  name:'Lemonade Stand',  emoji:'🍋', cost:15,        cps:0.2 },
+  { id:'blend',  name:'Juice Blender',   emoji:'🥤', cost:120,       cps:1.2 },
+  { id:'shake',  name:'Cocktail Shaker', emoji:'🍸', cost:1300,      cps:9 },
+  { id:'tiki',   name:'Tiki Bartender',  emoji:'🍹', cost:14000,     cps:55 },
+  { id:'beach',  name:'Beach Bar',       emoji:'⛱️', cost:160000,    cps:300 },
+  { id:'roof',   name:'Rooftop Lounge',  emoji:'🌃', cost:2000000,   cps:1700 },
+  { id:'cruise', name:'Cruise Ship Bar', emoji:'🛳️', cost:26000000,  cps:9500 },
+  { id:'resort', name:'Island Resort',   emoji:'🏝️', cost:400000000, cps:52000 },
+];
+const GROWTH = 1.15;
+
+const UPGRADES = [
+  { id:'tip1', name:'Bigger Tips',     desc:'Tapping earns ×2',     cost:200,    kind:'tap',    mul:2, req:s=>true },
+  { id:'tip2', name:'Generous Pours',  desc:'Tapping earns ×2',     cost:5000,   kind:'tap',    mul:2, req:s=>s.totalEarned>=2500 },
+  { id:'tip3', name:'Flair Bartending',desc:'Tapping earns ×3',     cost:120000, kind:'tap',    mul:3, req:s=>s.totalEarned>=70000 },
+  { id:'lemonU',name:'Fresh Lemons',   desc:'Lemonade Stands ×2',   cost:600,    kind:'station',target:'lemon', mul:2, req:s=>own('lemon')>=10 },
+  { id:'blendU',name:'Sharper Blades', desc:'Juice Blenders ×2',    cost:7000,   kind:'station',target:'blend', mul:2, req:s=>own('blend')>=10 },
+  { id:'shakeU',name:'Golden Shaker',  desc:'Cocktail Shakers ×2',  cost:75000,  kind:'station',target:'shake', mul:2, req:s=>own('shake')>=10 },
+  { id:'tikiU', name:'Tiki Magic',     desc:'Tiki Bartenders ×2',   cost:800000, kind:'station',target:'tiki',  mul:2, req:s=>own('tiki')>=10 },
+  { id:'beachU',name:'Prime Beachfront',desc:'Beach Bars ×2',       cost:9000000,kind:'station',target:'beach', mul:2, req:s=>own('beach')>=10 },
+  { id:'hh1',  name:'Happy Hour',      desc:'All income ×2',        cost:50000,  kind:'global', mul:2, req:s=>s.totalEarned>=30000 },
+  { id:'hh2',  name:'Live Music',      desc:'All income ×2',        cost:3500000,kind:'global', mul:2, req:s=>s.totalEarned>=2000000 },
+  { id:'hh3',  name:'Celebrity DJ',    desc:'All income ×3',        cost:180000000,kind:'global',mul:3,req:s=>s.totalEarned>=100000000 },
+];
+
+const SUF = ['','K','M','B','T','Qa','Qi','Sx','Sp','Oc','No','Dc'];
+function fmt(n){
+  if (!isFinite(n)) return '∞';
+  if (n < 1000) return (Number.isInteger(n) ? n : n.toFixed(1)).toString();
+  let i = 0; while (n >= 1000 && i < SUF.length-1){ n /= 1000; i++; }
+  return (n < 10 ? n.toFixed(2) : n < 100 ? n.toFixed(1) : Math.floor(n)) + SUF[i];
+}
+function fmtTime(s){
+  s = Math.floor(s); const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+  if (h) return h+'h '+m+'m'; if (m) return m+'m '+sec+'s'; return sec+'s';
+}
+
+// ---------- state ----------
+const SAVE = 'tikiTycoonSave_v1';
+const OFFLINE_CAP = 8*3600;       // 8 hours of idle earnings max
+let state = freshState();
+function freshState(){ return { coins:0, totalEarned:0, runEarned:0, tokens:0, counts:{}, bought:{}, lastSave:Date.now(), muted:false }; }
+const own = id => state.counts[id] || 0;
+const has = id => !!state.bought[id];
+
+function load(){
+  try { const s = JSON.parse(localStorage.getItem(SAVE)); if (s && typeof s === 'object'){ state = Object.assign(freshState(), s); } } catch(e){}
+}
+function save(){ state.lastSave = Date.now(); try { localStorage.setItem(SAVE, JSON.stringify(state)); } catch(e){} }
+
+// ---------- economy ----------
+function stationMul(id){ let m = 1; for (const u of UPGRADES) if (u.kind==='station' && u.target===id && has(u.id)) m *= u.mul; return m; }
+function globalMul(){ let m = 1; for (const u of UPGRADES) if (u.kind==='global' && has(u.id)) m *= u.mul; return m; }
+function tapMul(){ let m = 1; for (const u of UPGRADES) if (u.kind==='tap' && has(u.id)) m *= u.mul; return m; }
+function prestigeMul(){ return 1 + state.tokens * 0.05; }
+function cps(){
+  let c = 0; for (const st of STATIONS) c += own(st.id) * st.cps * stationMul(st.id);
+  return c * globalMul() * prestigeMul();
+}
+function tapValue(){ return 1 * tapMul() * globalMul() * prestigeMul(); }
+function costOf(st){ return Math.ceil(st.cost * Math.pow(GROWTH, own(st.id))); }
+function tokensGain(){ return Math.floor(Math.sqrt(state.runEarned / 1e6)); }
+
+function buyStation(st){
+  const c = costOf(st);
+  if (state.coins < c) return false;
+  state.coins -= c; state.counts[st.id] = own(st.id) + 1;
+  blip(220 + Math.min(600, own(st.id)*8), 0.06, 'square', 0.10);
+  refreshUpgradeAvailability(true); renderStations(); renderHUD(); save();
+  return true;
+}
+function buyUpgrade(u){
+  if (has(u.id) || !u.req(state) || state.coins < u.cost) return false;
+  state.coins -= u.cost; state.bought[u.id] = true;
+  blip(520, 0.08, 'triangle', 0.16); blip(760, 0.10, 'sine', 0.08);
+  buildUpgrades(); renderStations(); renderHUD(); save();
+  return true;
+}
+function doRenovate(){
+  const g = tokensGain();
+  if (g < 1) return;
+  state.tokens += g;
+  state.coins = 0; state.runEarned = 0; state.counts = {}; state.bought = {};
+  blip(330,0.18,'square',0.16); setTimeout(()=>blip(550,0.22,'triangle',0.16),70); setTimeout(()=>blip(770,0.3,'sine',0.14),150);
+  buildUpgrades(); renderStations(); renderPrestige(); renderHUD(); switchTab('stations'); save();
+}
+
+// ---------- rendering ----------
+const $ = id => document.getElementById(id);
+const elCoins=$('coins'), elCps=$('cps'), elTap=$('tap'), elTok=$('tok'), elTokWrap=$('tokwrap');
+let stationRows = {};
+
+function renderHUD(){
+  elCoins.textContent = fmt(state.coins);
+  elCps.textContent = fmt(cps());
+  elTap.textContent = '+' + fmt(tapValue());
+  if (state.tokens > 0){ elTokWrap.classList.remove('hidden'); elTok.textContent = state.tokens; }
+  else elTokWrap.classList.add('hidden');
+}
+
+function renderStations(){
+  const panel = $('stations');
+  if (!panel.dataset.built){
+    panel.innerHTML = '<div class="sectitle">Your Bar</div>';
+    for (const st of STATIONS){
+      const row = document.createElement('div'); row.className = 'row';
+      row.innerHTML =
+        '<div class="emoji">'+st.emoji+'</div>'+
+        '<div class="info"><div class="nm">'+st.name+'</div><div class="sub"></div></div>'+
+        '<div class="own">0</div>'+
+        '<button class="buy"><span class="t">Buy</span><span class="c"></span></button>';
+      row.querySelector('.buy').addEventListener('click', ()=>buyStation(st));
+      panel.appendChild(row);
+      stationRows[st.id] = row;
+    }
+    panel.dataset.built = '1';
+  }
+  for (const st of STATIONS){
+    const row = stationRows[st.id], n = own(st.id), c = costOf(st);
+    row.querySelector('.own').textContent = n;
+    row.querySelector('.sub').textContent = '+' + fmt(st.cps*stationMul(st.id)*globalMul()*prestigeMul()) + '/sec each';
+    const btn = row.querySelector('.buy');
+    btn.querySelector('.c').textContent = '💰 ' + fmt(c);
+    btn.disabled = state.coins < c;
+  }
+}
+
+function availableUpgrades(){ return UPGRADES.filter(u => !has(u.id) && u.req(state)); }
+function buildUpgrades(){
+  const panel = $('upgrades');
+  const list = availableUpgrades();
+  panel.innerHTML = '<div class="sectitle">Boosts</div>';
+  if (!list.length){ panel.insertAdjacentHTML('beforeend','<div class="empty">No boosts available yet.<br>Buy more stations to unlock upgrades. 🍹</div>'); lastUpIds=''; return; }
+  for (const u of list){
+    const row = document.createElement('div'); row.className = 'row up';
+    row.innerHTML =
+      '<div class="emoji">⭐</div>'+
+      '<div class="info"><div class="nm">'+u.name+'</div><div class="sub">'+u.desc+'</div></div>'+
+      '<button class="buy"><span class="t">Buy</span><span class="c">💰 '+fmt(u.cost)+'</span></button>';
+    const btn = row.querySelector('.buy');
+    btn.disabled = state.coins < u.cost;
+    btn.addEventListener('click', ()=>buyUpgrade(u));
+    panel.appendChild(row);
+  }
+  lastUpIds = list.map(u=>u.id).join(',');
+}
+let lastUpIds = '';
+function refreshUpgradeAvailability(force){
+  const list = availableUpgrades();
+  const ids = list.map(u=>u.id).join(',');
+  if (force || ids !== lastUpIds){ buildUpgrades(); }
+  // update affordability of currently shown buttons + the "new" dot
+  const panel = $('upgrades');
+  const btns = panel.querySelectorAll('.row.up');
+  list.forEach((u,i)=>{ const r = btns[i]; if (r) r.querySelector('.buy').disabled = state.coins < u.cost; });
+  const affordable = list.some(u => state.coins >= u.cost);
+  $('upDot').classList.toggle('hidden', !(affordable && !tabIs('upgrades')));
+}
+
+function renderPrestige(){
+  const g = tokensGain();
+  const panel = $('prestige');
+  panel.innerHTML =
+    '<div class="pcard">'+
+      '<h2>Renovate the Bar 🌺</h2>'+
+      '<p>Start fresh, but keep <b>Tiki Tokens</b> forever. Each token gives <b>+5%</b> to all income and taps.</p>'+
+      '<p>Tokens now: <b>'+state.tokens+'</b> &nbsp;(+'+(state.tokens*5)+'% bonus)</p>'+
+      '<div class="big">+'+g+' 🌺</div>'+
+      '<p style="opacity:.75;font-size:13px">You earn tokens from total coins made this run. Renovating resets stations, coins and boosts.</p>'+
+      '<button id="renovateBtn"'+(g<1?' disabled':'')+'>Renovate for '+g+' 🌺</button>'+
+      (g<1?'<p style="opacity:.6;font-size:12px;margin-top:10px">Earn more to unlock your first token.</p>':'')+
+    '</div>';
+  const b = $('renovateBtn');
+  if (b) b.addEventListener('click', ()=>{
+    if (confirm('Renovate now? You will reset this run but gain '+tokensGain()+' Tiki Tokens (permanent +'+(tokensGain()*5)+'% income).')) doRenovate();
+  });
+}
+
+// ---------- tabs ----------
+function tabIs(name){ return !$(name).classList.contains('hidden'); }
+function switchTab(name){
+  for (const t of ['stations','upgrades','prestige']) $(t).classList.toggle('hidden', t!==name);
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  if (name==='upgrades'){ buildUpgrades(); $('upDot').classList.add('hidden'); }
+  if (name==='prestige') renderPrestige();
+}
+document.querySelectorAll('#tabs button').forEach(b=> b.addEventListener('click', ()=>switchTab(b.dataset.tab)));
+
+// ---------- tap to serve ----------
+function floatNum(x, y, txt){
+  const f = document.createElement('div'); f.className='float'; f.textContent=txt;
+  f.style.left = x+'px'; f.style.top = y+'px';
+  $('floatLayer').appendChild(f);
+  setTimeout(()=>f.remove(), 1000);
+}
+function serve(ev){
+  const v = tapValue();
+  state.coins += v; state.totalEarned += v; state.runEarned += v;
+  renderHUD(); renderStations();
+  let x = window.innerWidth/2, y = window.innerHeight*0.34;
+  if (ev){ const t = ev.changedTouches ? ev.changedTouches[0] : ev; if (t && t.clientX){ x = t.clientX; y = t.clientY; } }
+  floatNum(x-14, y-10, '+'+fmt(v));
+  blip(300, 0.05, 'sine', 0.07);
+}
+$('serveBtn').addEventListener('click', serve);
+
+// ---------- audio ----------
+let actx = null;
+function initAudio(){ if (!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if (actx && actx.state==='suspended') actx.resume(); }
+function blip(freq,dur,type,vol){ if (state.muted || !actx) return;
+  const o=actx.createOscillator(), g=actx.createGain(); o.type=type; o.frequency.value=freq;
+  o.connect(g); g.connect(actx.destination); const t=actx.currentTime;
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.start(t); o.stop(t+dur+0.02);
+}
+window.addEventListener('pointerdown', initAudio, { once:true });
+$('mute').addEventListener('click', ()=>{ state.muted=!state.muted; $('mute').textContent = state.muted?'🔇':'🔊'; save(); });
+
+// ---------- menu ----------
+$('menuBtn').addEventListener('click', ()=>{
+  $('statLine').textContent = 'Total earned: 💰 '+fmt(state.totalEarned)+'  ·  Tokens: '+state.tokens+' 🌺';
+  $('menu').classList.remove('hidden');
+});
+$('closeMenu').addEventListener('click', ()=>$('menu').classList.add('hidden'));
+$('wipe').addEventListener('click', ()=>{
+  if (confirm('Erase ALL progress on this device? This cannot be undone.')){
+    state = freshState(); try{ localStorage.removeItem(SAVE); }catch(e){}
+    stationRows = {}; $('stations').dataset.built=''; renderStations(); buildUpgrades(); renderPrestige(); renderHUD();
+    $('menu').classList.add('hidden'); switchTab('stations');
+  }
+});
+
+// ---------- offline earnings ----------
+function applyOffline(){
+  const dt = Math.min(OFFLINE_CAP, Math.max(0, (Date.now() - state.lastSave)/1000));
+  const rate = cps();
+  const gain = rate * dt;
+  if (gain > 0 && dt > 30){
+    state.coins += gain; state.totalEarned += gain; state.runEarned += gain;
+    $('awayTime').textContent = 'You were away for ' + fmtTime(dt) + '.';
+    $('awayCoins').textContent = '💰 ' + fmt(gain);
+    $('away').classList.remove('hidden');
+  }
+}
+$('awayOk').addEventListener('click', ()=>$('away').classList.add('hidden'));
+
+// ---------- main loop ----------
+let lastTick = Date.now();
+function tick(){
+  const now = Date.now(); let dt = (now - lastTick)/1000; lastTick = now;
+  if (dt > 0){ const g = cps()*dt; if (g>0){ state.coins+=g; state.totalEarned+=g; state.runEarned+=g; } }
+  renderHUD();
+  refreshUpgradeAvailability(false);
+  // keep station buy buttons' affordability fresh
+  for (const st of STATIONS){ const row = stationRows[st.id]; if (row){ const c=costOf(st); row.querySelector('.buy').disabled = state.coins<c; } }
+}
+function startLoops(){
+  setInterval(tick, 100);
+  setInterval(save, 5000);
+  document.addEventListener('visibilitychange', ()=>{ if (document.hidden) save(); });
+  window.addEventListener('pagehide', save);
+}
+
+// ---------- boot ----------
+function boot(){
+  load();
+  if (state.muted) $('mute').textContent = '🔇';
+  renderStations(); buildUpgrades(); renderHUD();
+  applyOffline();
+  startLoops();
+}
+boot();
+
+// expose for tests
+window.__tycoon = { get state(){return state;}, STATIONS, UPGRADES, cps, tapValue, costOf, tokensGain,
+  buyStation, buyUpgrade, serve, doRenovate, save, load, fmt, freshState,
+  setState:s=>{ state = Object.assign(freshState(), s); } };
+})();
+</script>
+</body>
+</html>

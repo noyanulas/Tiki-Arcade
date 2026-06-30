@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tiki Merge">
+<meta name="theme-color" content="#241810">
+<title>Tiki Merge — Cocktail Bar</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; overflow:hidden; overscroll-behavior:none; -webkit-user-select:none; user-select:none; background:#1b1208;
+              font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif; }
+  #wrap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+          background:radial-gradient(120% 90% at 50% 0%, #4a3620 0%, #241810 60%, #160e07 100%); }
+  canvas { display:block; touch-action:none; }
+  .btn { cursor:pointer; border:none; border-radius:18px; font-weight:800; letter-spacing:.5px;
+         color:#5a2f12; background:linear-gradient(180deg,#ffe07a,#ff9f1c);
+         box-shadow:0 6px 0 #b86a12, 0 10px 18px rgba(0,0,0,.45); padding:16px 34px; font-size:21px;
+         transition:transform .06s, box-shadow .06s; }
+  .btn:active { transform:translateY(4px); box-shadow:0 2px 0 #b86a12, 0 4px 8px rgba(0,0,0,.4); }
+  #overlay { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+             gap:18px; text-align:center; color:#fff; z-index:20;
+             background:rgba(20,12,6,.74); backdrop-filter:blur(3px); padding:24px; }
+  #overlay h1 { font-size:clamp(34px,9vw,60px); color:#ffd23f; text-shadow:0 3px 0 #b8500f, 0 6px 14px rgba(0,0,0,.5);
+                line-height:1.05; }
+  #overlay p { max-width:460px; font-size:clamp(14px,3.6vw,17px); line-height:1.55; color:#ffe9c7; opacity:.96; }
+  #overlay .score { font-size:clamp(20px,6vw,30px); font-weight:800; color:#fff; }
+  #overlay .score b { color:#ffd23f; }
+  .hidden { display:none !important; }
+  #mute { position:fixed; top:calc(14px + env(safe-area-inset-top)); right:14px; z-index:25; width:46px; height:46px; border-radius:50%;
+          border:none; cursor:pointer; font-size:22px; line-height:46px; text-align:center;
+          background:rgba(0,0,0,.35); color:#fff; backdrop-filter:blur(2px); }
+  #pause { position:fixed; top:calc(14px + env(safe-area-inset-top)); right:68px; z-index:25; width:46px; height:46px; border-radius:50%;
+          border:none; cursor:pointer; font-size:20px; line-height:46px; text-align:center;
+          background:rgba(0,0,0,.35); color:#fff; backdrop-filter:blur(2px); }
+  #swap { position:fixed; bottom:calc(96px + env(safe-area-inset-bottom)); right:14px; z-index:25; height:42px; padding:0 16px; border-radius:21px;
+          border:none; cursor:pointer; font-size:16px; font-weight:800; letter-spacing:.5px;
+          color:#5a2f12; background:linear-gradient(180deg,#ffe07a,#ff9f1c);
+          box-shadow:0 4px 0 #b86a12, 0 6px 12px rgba(0,0,0,.4); }
+  #swap:active { transform:translateY(3px); box-shadow:0 1px 0 #b86a12; }
+  .chips { display:flex; gap:9px; flex-wrap:wrap; justify-content:center; max-width:480px; }
+  .chip { display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.1); border-radius:20px;
+          padding:6px 12px; font-size:13px; color:#ffe9c7; }
+  .dot { width:14px; height:14px; border-radius:50%; box-shadow:inset 0 0 0 2px rgba(255,255,255,.4); }
+  .credit { position:fixed; bottom:8px; left:0; right:0; text-align:center; color:#ffffff55; font-size:11px; z-index:5; }
+</style>
+</head>
+<body>
+<a href="../" aria-label="Back to menu" style="position:fixed;z-index:60;top:calc(12px + env(safe-area-inset-top));left:12px;width:42px;height:42px;border-radius:50%;border:none;background:rgba(0,0,0,.42);color:#fff;font:700 24px/42px system-ui,sans-serif;text-align:center;text-decoration:none;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)">‹</a>
+<div id="wrap"><canvas id="c"></canvas></div>
+<button id="mute" title="Mute">🔊</button>
+<button id="pause" title="Pause">⏸</button>
+<button id="swap" title="Swap drink">⇄ Swap</button>
+
+<div id="overlay">
+  <h1>🍹 Tiki Merge</h1>
+  <p>Slide to aim, release to <b>serve</b> a cocktail up the bar. When two matching drinks touch they <b>merge</b> into the next, fancier glass. Fill the <b>To-Go Order</b> for big tips — but don't let the glasses pile back past the dashed line!</p>
+  <div class="chips" id="legend"></div>
+  <button class="btn" id="startBtn">Open the Bar</button>
+</div>
+
+<div class="credit">Drag anywhere to aim · release to serve · ← → + space also work</div>
+
+<script>
+(() => {
+"use strict";
+
+// ====================================================================
+//  Virtual play space  (everything is authored at this resolution,
+//  then letter-boxed to fit the device)
+// ====================================================================
+const VW = 540, VH = 1040;
+const fieldTop = 196, fieldLeft = 46, fieldRight = 494;
+const dangerY = 792, launchY = 902, bottomWall = 958;
+
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let scale = 1, offX = 0, offY = 0, dpr = 1;
+
+function readInset(side){
+  try {
+    if (typeof getComputedStyle !== 'function' || !document.body) return 0;
+    const d = document.createElement('div');
+    d.style.cssText = 'position:fixed;left:0;top:0;width:0;visibility:hidden;height:env(safe-area-inset-'+side+');';
+    document.body.appendChild(d);
+    const v = parseFloat(getComputedStyle(d).height) || 0;
+    document.body.removeChild(d);
+    return v;
+  } catch(e){ return 0; }
+}
+function resize(){
+  const w = window.innerWidth, h = window.innerHeight;
+  const insT = readInset('top'), insB = readInset('bottom'), insL = readInset('left'), insR = readInset('right');
+  dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  cv.style.width = w + 'px';
+  cv.style.height = h + 'px';
+  cv.width = Math.floor(w * dpr);
+  cv.height = Math.floor(h * dpr);
+  const availW = w - insL - insR, availH = h - insT - insB;
+  scale = Math.min(availW / VW, availH / VH);
+  offX = insL + (availW - VW * scale) / 2;
+  offY = insT + (availH - VH * scale) / 2;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ====================================================================
+//  Cocktail tiers — each is a DISTINCT glass shape + palette + garnish
+// ====================================================================
+//  shape ids:  tumbler · highball · hurricane · collins · martini
+//              goblet · margarita · tiki
+const TIERS = [
+  { name:'Lemon Fizz',  shape:'tumbler',   c1:'#FFE36A', c2:'#FBB214', r:26, fill:0.66 },
+  { name:'Cranberry',   shape:'highball',  c1:'#FF6E7A', c2:'#C8163E', r:33, fill:0.80 },
+  { name:'Sunset',      shape:'hurricane', c1:'#FFB14C', c2:'#F2530E', r:40, fill:0.74 },
+  { name:'Mojito',      shape:'collins',   c1:'#8BE86A', c2:'#1E9B45', r:47, fill:0.80 },
+  { name:'Blue Lagoon', shape:'martini',   c1:'#5BC8FF', c2:'#176FD6', r:54, fill:0.92 },
+  { name:'Grape Punch', shape:'goblet',    c1:'#B98BFF', c2:'#6E31D6', r:62, fill:0.78 },
+  { name:'Pink Lady',   shape:'margarita', c1:'#FF93C8', c2:'#E23E8C', r:70, fill:0.90 },
+  { name:'Tiki Royale', shape:'tiki',      c1:'#FFC24B', c2:'#FF4FA3', r:80, fill:0.84 },
+];
+const MAX = TIERS.length - 1;
+const PTS = [0, 2, 5, 10, 20, 40, 75, 140, 600];
+
+// ====================================================================
+//  Game state
+// ====================================================================
+let cocktails = [];
+let particles = [];
+let floaters = [];
+let rings = [];
+let state = 'menu';                 // menu | play | over
+let score = 0, best = 0, bestTier = 0;
+try { best = parseInt(localStorage.getItem('tikiMergeBest'), 10) || 0; } catch(e){}
+let current = 0;
+let queue = [0, 0];
+let flash = 0;            // white flash on big merges
+let paused = false;
+let aimX = VW / 2;
+let cooldown = 0;
+let shake = 0, shakeT = 0;
+let warnPulse = 0;
+let T = 0;                          // global animation clock (seconds)
+let uid = 1;
+
+// To-Go order
+let order = { tier: 3, reward: 120, pulse: 0 };
+// Combo
+let combo = 0, comboT = 0;
+
+function weightedSpawn(){
+  // gentle ramp: as score climbs, fewer tier-0s, a few more tier-2s
+  const dif = Math.min(1, score / 4000);
+  const p0 = 0.58 - 0.18 * dif;
+  const p1 = p0 + 0.30;
+  const r = Math.random();
+  if (r < p0) return 0;
+  if (r < p1) return 1;
+  return 2;
+}
+
+function newOrder(){
+  // target a tier a little above what the player has reached, capped
+  const lo = Math.min(3, Math.max(3, bestTier - 1));
+  const hi = Math.min(MAX, Math.max(lo, bestTier + 1));
+  const tier = lo + Math.floor(Math.random() * (hi - lo + 1));
+  order = { tier, reward: 60 + tier * 35, pulse: 0 };
+}
+
+function reset(){
+  cocktails = []; particles = []; floaters = []; rings = [];
+  score = 0; bestTier = 0; cooldown = 0; shake = 0;
+  combo = 0; comboT = 0;
+  current = weightedSpawn(); queue = [weightedSpawn(), weightedSpawn()];
+  aimX = VW / 2; state = 'play'; paused = false; flash = 0;
+  newOrder();
+}
+
+// ====================================================================
+//  Physics
+//  Gravity pulls drinks UP the table (toward the back bar shelf), so
+//  served glasses settle into a pile against the back wall and press
+//  together — which is what makes matching drinks reliably MERGE.
+// ====================================================================
+const GRAV = 760;            // px/s^2 toward the back wall (-y)
+const LAUNCH_SPEED = 720;    // initial serve speed (up)
+const DAMP = 0.992;          // gentle air drag
+const REST = 0.05;           // drink-drink restitution (low = they nestle)
+const WALL_REST = 0.18;
+const SLOP = 0.4;
+const CORR = 0.65;
+const MERGE_GAP = 3.0;       // merge the instant two matching drinks touch
+const COH_RANGE = 16;        // matching drinks within this gap gently drift together
+const COH_PULL = 0.5;        // strength of that pull (px per relax iteration)
+
+function clampAim(){
+  const r = TIERS[current].r;
+  aimX = Math.max(fieldLeft + r, Math.min(fieldRight - r, aimX));
+}
+
+function launch(){
+  if (state !== 'play' || paused || cooldown > 0) return;
+  clampAim();
+  const t = TIERS[current];
+  cocktails.push({ id: uid++, x: aimX, y: launchY, vx: 0, vy: -LAUNCH_SPEED,
+                   tier: current, r: t.r, age: 0, pop: 0, spawnT: T,
+                   phase: Math.random() * 6.28, wob: 0, fresh: true });
+  current = queue.shift(); queue.push(weightedSpawn());
+  cooldown = 0.34;
+  launchSound();
+}
+
+function swapDrink(){
+  if (state !== 'play' || paused) return;
+  const t = current; current = queue[0]; queue[0] = t;
+  blip(360, 0.06, 'sine', 0.10); blip(520, 0.05, 'sine', 0.06);
+}
+
+function step(h){
+  if (cooldown > 0) cooldown -= h;
+  if (comboT > 0){ comboT -= h; if (comboT <= 0) combo = 0; }
+  if (order.pulse > 0) order.pulse = Math.max(0, order.pulse - h * 2);
+
+  for (const c of cocktails){
+    c.age += h;
+    if (c.pop > 0) c.pop = Math.max(0, c.pop - h * 4);
+    if (c.wob > 0) c.wob = Math.max(0, c.wob - h * 2.2);
+    // integrate
+    c.vy -= GRAV * h;                 // gravity toward back wall
+    c.x += c.vx * h;
+    c.y += c.vy * h;
+    c.vx *= DAMP; c.vy *= DAMP;
+    // walls
+    if (c.x < fieldLeft + c.r){ c.x = fieldLeft + c.r; c.vx = Math.abs(c.vx) * WALL_REST; }
+    if (c.x > fieldRight - c.r){ c.x = fieldRight - c.r; c.vx = -Math.abs(c.vx) * WALL_REST; }
+    if (c.y < fieldTop + c.r){                              // back wall
+      c.y = fieldTop + c.r;
+      c.vy = Math.abs(c.vy) < 40 ? 0 : Math.abs(c.vy) * WALL_REST;
+    }
+    if (c.y > bottomWall - c.r){ c.y = bottomWall - c.r; c.vy = -Math.abs(c.vy) * WALL_REST; }
+  }
+
+  // collision relaxation
+  for (let it = 0; it < 5; it++){
+    for (let i = 0; i < cocktails.length; i++){
+      const a = cocktails[i];
+      for (let j = i + 1; j < cocktails.length; j++){
+        const b = cocktails[j];
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let d = Math.hypot(dx, dy);
+        const min = a.r + b.r;
+        if (d < min && d > 0.0001){
+          const nx = dx / d, ny = dy / d;
+          const pen = min - d;
+          if (pen > SLOP){
+            const corr = (pen - SLOP) * CORR * 0.5;
+            a.x -= nx * corr; a.y -= ny * corr;
+            b.x += nx * corr; b.y += ny * corr;
+          }
+          const rvx = b.vx - a.vx, rvy = b.vy - a.vy;
+          const vn = rvx * nx + rvy * ny;
+          if (vn < 0){
+            const imp = -(1 + REST) * vn * 0.5;
+            a.vx -= imp * nx; a.vy -= imp * ny;
+            b.vx += imp * nx; b.vy += imp * ny;
+          }
+        } else if (a.tier === b.tier && d > 0.0001 && d < min + COH_RANGE){
+          // matching drinks that are close but not yet touching get a gentle
+          // tug toward each other so they make contact and merge
+          const nx = dx / d, ny = dy / d;
+          a.x += nx * COH_PULL; a.y += ny * COH_PULL;
+          b.x -= nx * COH_PULL; b.y -= ny * COH_PULL;
+        }
+      }
+    }
+  }
+  for (const c of cocktails){
+    if (c.fresh && c.age > 0.06 && Math.hypot(c.vx, c.vy) < 70){
+      c.fresh = false; splash(c.x, c.y - c.r * 0.4, TIERS[c.tier].c1); clinkSound();
+    }
+  }
+  handleMerges();
+  checkOver();
+}
+
+function handleMerges(){
+  let dirty = false;
+  for (let i = 0; i < cocktails.length; i++){
+    const a = cocktails[i];
+    if (a.dead) continue;
+    for (let j = i + 1; j < cocktails.length; j++){
+      const b = cocktails[j];
+      if (b.dead || b.tier !== a.tier) continue;
+      const d = Math.hypot(b.x - a.x, b.y - a.y);
+      if (d < a.r + b.r + MERGE_GAP){
+        mergePair(a, b); dirty = true; break;
+      }
+    }
+  }
+  if (dirty) cocktails = cocktails.filter(c => !c.dead);
+}
+
+function bumpCombo(){
+  combo++; comboT = 1.4;
+  return combo > 1 ? combo : 1;
+}
+
+function mergePair(a, b){
+  a.dead = b.dead = true;
+  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+  const mult = bumpCombo();
+
+  if (a.tier >= MAX){
+    // merging two top-tier drinks: jackpot + clear
+    const gain = 600 * mult;
+    score += gain;
+    burst(mx, my, TIERS[MAX].c1, 40, 4.6);
+    rings.push({ x:mx, y:my, r:10, life:0.6, col:TIERS[MAX].c1 });
+    floaters.push({ x:mx, y:my, txt:'+' + gain, life:1.2, vy:-46, col:'#FFD23F', sz:32 });
+    shakeT = 0.5; shake = 18; flash = 0.7;
+    bigSound();
+    return;
+  }
+
+  const nt = a.tier + 1;
+  const t = TIERS[nt];
+  cocktails.push({ id: uid++, x:mx, y:my, vx:(a.vx + b.vx) * 0.2, vy:(a.vy + b.vy) * 0.2,
+                   tier:nt, r:t.r, age:0.2, pop:1, spawnT: T,
+                   phase: Math.random() * 6.28, wob: 1 });
+  let gain = PTS[nt] * mult;
+  score += gain;
+  if (nt > bestTier) bestTier = nt;
+
+  burst(mx, my, t.c1, 12 + nt * 2, 2.2 + nt * 0.18);
+  rings.push({ x:mx, y:my, r:t.r*0.5, life:0.4, col:t.c1 });
+  let label = '+' + gain;
+  if (mult > 1) label += '  x' + mult;
+  floaters.push({ x:mx, y:my, txt:label, life:0.95, vy:-40, col: mult>1?'#FFD23F':'#fff', sz:20 + nt });
+  shakeT = Math.max(shakeT, 0.12 + nt * 0.02); shake = Math.max(shake, 4 + nt);
+  mergeSound(nt);
+  if (nt >= 5) flash = Math.max(flash, 0.4);
+
+  // To-Go order fulfilled?
+  if (nt === order.tier){
+    const tip = order.reward * mult;
+    score += tip;
+    order.pulse = 1;
+    burst(mx, my, '#FFD23F', 26, 3.4);
+    floaters.push({ x:mx, y:my - 30, txt:'ORDER! +' + tip, life:1.3, vy:-40, col:'#FFD23F', sz:26 });
+    orderSound();
+    newOrder();
+  }
+}
+
+function checkOver(){
+  for (const c of cocktails){
+    if (c.age > 0.7 && c.y > dangerY && Math.hypot(c.vx, c.vy) < 26){
+      gameOver(); return;
+    }
+  }
+}
+
+// ====================================================================
+//  FX
+// ====================================================================
+function burst(x, y, col, n, spd){
+  for (let i = 0; i < n; i++){
+    const a = Math.random() * Math.PI * 2;
+    const s = (0.4 + Math.random()) * spd * 60;
+    particles.push({ x, y, vx:Math.cos(a)*s, vy:Math.sin(a)*s - 40,
+                     life:0.5 + Math.random()*0.5, r:2 + Math.random()*4, col });
+  }
+}
+function splash(x, y, col){
+  for (let i = 0; i < 9; i++){
+    const a = -Math.PI/2 + (Math.random()-0.5) * 1.7;
+    const sp = (0.5 + Math.random()) * 150;
+    particles.push({ x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:0.35+Math.random()*0.25, r:1.5+Math.random()*2.5, col });
+  }
+}
+function stepFX(h){
+  for (const p of particles){
+    p.x += p.vx * h; p.y += p.vy * h; p.vy += 520 * h;
+    p.vx *= 0.96; p.life -= h;
+  }
+  particles = particles.filter(p => p.life > 0);
+  for (const f of floaters){ f.y += f.vy * h; f.vy *= 0.94; f.life -= h; }
+  floaters = floaters.filter(f => f.life > 0);
+  for (const r of rings){ r.r += (r.col ? 180 : 120) * h; r.life -= h; }
+  rings = rings.filter(r => r.life > 0);
+  if (shakeT > 0){ shakeT -= h; if (shakeT <= 0) shake = 0; }
+  warnPulse += h;
+  if (flash > 0) flash = Math.max(0, flash - h * 1.6);
+}
+
+// ====================================================================
+//  Aim prediction (where the served drink will come to rest)
+// ====================================================================
+function aimTarget(){
+  const r = TIERS[current].r;
+  let ty = fieldTop + r;
+  for (const c of cocktails){
+    const dx = Math.abs(c.x - aimX);
+    const sum = c.r + r;
+    if (dx < sum){
+      const cy = c.y + Math.sqrt(Math.max(0, sum*sum - dx*dx));
+      if (cy > ty) ty = cy;
+    }
+  }
+  return Math.min(ty, launchY - r);
+}
+
+// ====================================================================
+//  RENDERING
+// ====================================================================
+function frameTransform(){
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  let sx = 0, sy = 0;
+  if (shake > 0){ sx = (Math.random()*2-1)*shake; sy = (Math.random()*2-1)*shake; }
+  ctx.translate(offX + sx, offY + sy);
+  ctx.scale(scale, scale);
+}
+
+function roundRect(x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+}
+function roundRectPath(p, x, y, w, h, r){
+  p.moveTo(x+r, y);
+  p.arcTo(x+w, y, x+w, y+h, r);
+  p.arcTo(x+w, y+h, x, y+h, r);
+  p.arcTo(x, y+h, x, y, r);
+  p.arcTo(x, y, x+w, y, r);
+  p.closePath();
+}
+
+// ---------- Scene background ----------
+function drawBackground(){
+  // warm sandy floor
+  let g = ctx.createLinearGradient(0,0,0,VH);
+  g.addColorStop(0,'#d9b478'); g.addColorStop(0.5,'#caa162'); g.addColorStop(1,'#b07f43');
+  ctx.fillStyle = g; ctx.fillRect(0,0,VW,VH);
+
+  // palm leaves in the corners
+  drawLeaf(-8, 150, 1.0, -0.5);
+  drawLeaf(VW+8, 120, 1.0, Math.PI+0.5);
+  drawLeaf(-6, VH-140, 0.9, 0.7);
+  drawLeaf(VW+6, VH-170, 0.9, Math.PI-0.7);
+
+  // back bar shelf with bottles (behind the table, near the top)
+  drawShelf();
+
+  // ---- the table ----
+  // raised frame
+  roundRect(fieldLeft-26, fieldTop-26, (fieldRight-fieldLeft)+52, (bottomWall-fieldTop)+52, 30);
+  let fg = ctx.createLinearGradient(0,fieldTop,0,bottomWall);
+  fg.addColorStop(0,'#8a5a2c'); fg.addColorStop(1,'#6f4420');
+  ctx.fillStyle = fg; ctx.fill();
+  ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(60,34,12,.5)'; ctx.stroke();
+
+  // table top planks
+  roundRect(fieldLeft-8, fieldTop-8, (fieldRight-fieldLeft)+16, (bottomWall-fieldTop)+16, 18);
+  ctx.save(); ctx.clip();
+  let tg = ctx.createLinearGradient(0,fieldTop,0,bottomWall);
+  tg.addColorStop(0,'#cf9655'); tg.addColorStop(0.5,'#dba35d'); tg.addColorStop(1,'#e6b069');
+  ctx.fillStyle = tg; ctx.fillRect(fieldLeft-12,fieldTop-12,VW,VH);
+  const planks = 5;
+  const pw = (fieldRight - fieldLeft) / planks;
+  for (let i=1;i<planks;i++){
+    const x = fieldLeft + pw*i;
+    ctx.strokeStyle = 'rgba(120,74,32,.42)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(x, fieldTop-12); ctx.lineTo(x, bottomWall+12); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,228,184,.30)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x+2.5, fieldTop-12); ctx.lineTo(x+2.5, bottomWall+12); ctx.stroke();
+  }
+  // wood grain
+  ctx.strokeStyle = 'rgba(120,74,32,.10)'; ctx.lineWidth = 2;
+  for (let i=0;i<30;i++){
+    const y = fieldTop + (i+0.5)*((bottomWall-fieldTop)/30);
+    ctx.beginPath(); ctx.moveTo(fieldLeft-12,y);
+    ctx.bezierCurveTo(VW*0.3,y+4, VW*0.6,y-4, VW+12,y); ctx.stroke();
+  }
+  // depth shading at the back
+  let sh = ctx.createLinearGradient(0,fieldTop-8,0,fieldTop+150);
+  sh.addColorStop(0,'rgba(60,34,12,.42)'); sh.addColorStop(1,'rgba(60,34,12,0)');
+  ctx.fillStyle = sh; ctx.fillRect(fieldLeft-12,fieldTop-12,VW,160);
+  ctx.restore();
+
+  drawDangerLine();
+
+  // serving pad glow at the launcher
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,240,200,.16)';
+  ctx.beginPath();
+  ctx.ellipse(aimX, launchY + TIERS[current].r*0.75, TIERS[current].r*1.2, TIERS[current].r*0.5, 0,0,Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+
+  drawTorch(16, fieldTop + 150, 0.8);
+  drawTorch(VW - 16, fieldTop + 150, 0.8);
+}
+
+function drawDangerLine(){
+  const warn = cocktails.some(c => c.y > dangerY - 80);
+  const a = warn ? (0.5 + 0.5*Math.sin(warnPulse*9)) : 0.85;
+  ctx.save();
+  ctx.setLineDash([20,15]); ctx.lineWidth = 6; ctx.lineCap='round';
+  ctx.strokeStyle = warn ? `rgba(255,80,80,${a})` : 'rgba(255,255,255,.92)';
+  ctx.shadowColor = warn ? 'rgba(255,40,40,.8)' : 'rgba(0,0,0,.3)'; ctx.shadowBlur = warn?16:4;
+  ctx.beginPath(); ctx.moveTo(fieldLeft-2, dangerY); ctx.lineTo(fieldRight+2, dangerY); ctx.stroke();
+  ctx.restore();
+}
+
+function drawLeaf(x, y, s, rot){
+  ctx.save(); ctx.translate(x,y); ctx.rotate(rot); ctx.scale(s,s);
+  ctx.globalAlpha = 0.55;
+  for (let k=0;k<5;k++){
+    ctx.save(); ctx.rotate((k-2)*0.4);
+    let lg = ctx.createLinearGradient(0,0,150,0);
+    lg.addColorStop(0,'#2f7d3a'); lg.addColorStop(1,'#62c75c');
+    ctx.fillStyle = lg;
+    ctx.beginPath(); ctx.moveTo(0,0);
+    ctx.quadraticCurveTo(85,-28,160,0);
+    ctx.quadraticCurveTo(85,28,0,0); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore(); ctx.globalAlpha = 1;
+}
+
+function drawTorch(x, y, sc){
+  ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc);
+  const pg = ctx.createLinearGradient(-6,0,6,0);
+  pg.addColorStop(0,'#6e4423'); pg.addColorStop(0.5,'#9a6533'); pg.addColorStop(1,'#5e3717');
+  ctx.fillStyle = pg; roundRect(-6, 6, 12, 240, 5); ctx.fill();
+  ctx.strokeStyle = 'rgba(60,34,12,.5)'; ctx.lineWidth = 2;
+  for (let i=1;i<5;i++){ ctx.beginPath(); ctx.moveTo(-6, 6+i*48); ctx.lineTo(6, 6+i*48); ctx.stroke(); }
+  ctx.fillStyle = '#3a2410'; ctx.beginPath();
+  ctx.moveTo(-14,8); ctx.lineTo(14,8); ctx.lineTo(8,-6); ctx.lineTo(-8,-6); ctx.closePath(); ctx.fill();
+  const gg = ctx.createRadialGradient(0,-18,4, 0,-18,64);
+  gg.addColorStop(0,'rgba(255,170,60,.30)'); gg.addColorStop(1,'rgba(255,170,60,0)');
+  ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(0,-18,64,0,Math.PI*2); ctx.fill();
+  const f = 1 + Math.sin(T*9 + x)*0.12 + Math.sin(T*21 + x)*0.05;
+  ctx.save(); ctx.translate(0,-6); ctx.scale(f, f*1.05);
+  let fg = ctx.createRadialGradient(0,-14,2, 0,-10,24);
+  fg.addColorStop(0,'rgba(255,248,200,.97)'); fg.addColorStop(0.45,'rgba(255,160,45,.92)'); fg.addColorStop(1,'rgba(255,70,20,0)');
+  ctx.fillStyle = fg; ctx.beginPath(); ctx.moveTo(0,-34); ctx.quadraticCurveTo(13,-12,0,2); ctx.quadraticCurveTo(-13,-12,0,-34); ctx.fill();
+  let fg2 = ctx.createRadialGradient(0,-10,1, 0,-8,12);
+  fg2.addColorStop(0,'rgba(255,255,235,.95)'); fg2.addColorStop(1,'rgba(255,210,90,0)');
+  ctx.fillStyle = fg2; ctx.beginPath(); ctx.moveTo(0,-20); ctx.quadraticCurveTo(7,-8,0,0); ctx.quadraticCurveTo(-7,-8,0,-20); ctx.fill();
+  ctx.restore();
+  ctx.restore();
+}
+
+function drawShelf(){
+  const y = fieldTop - 86;
+  ctx.save();
+  // shelf board
+  roundRect(fieldLeft-20, y, (fieldRight-fieldLeft)+40, 26, 6);
+  ctx.fillStyle = '#5e3717'; ctx.fill();
+  ctx.fillStyle = 'rgba(255,220,170,.18)'; ctx.fillRect(fieldLeft-20, y, (fieldRight-fieldLeft)+40, 5);
+  // bottles
+  const cols = ['#d2553f','#46a85f','#3f7fd2','#c8a33f','#9a4fd0','#cf5fa0'];
+  for (let i=0;i<7;i++){
+    const bx = fieldLeft + 16 + i*((fieldRight-fieldLeft-32)/6);
+    const bh = 40 + (i%3)*10;
+    ctx.fillStyle = cols[i%cols.length];
+    roundRect(bx-7, y-bh, 14, bh, 5); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.25)'; roundRect(bx-7, y-bh, 4, bh, 3); ctx.fill();
+    ctx.fillStyle = '#3a2410'; ctx.fillRect(bx-3, y-bh-7, 6, 8);  // neck
+  }
+  ctx.restore();
+}
+
+// ---------- Hanging "To-Go Orders" sign ----------
+function drawOrderSign(){
+  const cx = VW/2, top = 18, w = 230, h = 116;
+  // ropes
+  ctx.strokeStyle = 'rgba(50,30,12,.7)'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(cx-w*0.36,0); ctx.lineTo(cx-w*0.30,top+8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+w*0.36,0); ctx.lineTo(cx+w*0.30,top+8); ctx.stroke();
+  // paper
+  const p = order.pulse;
+  ctx.save();
+  ctx.translate(cx, top + h/2);
+  ctx.rotate(Math.sin(T*1.3)*0.012);
+  ctx.scale(1 + p*0.05, 1 + p*0.05);
+  roundRect(-w/2, -h/2, w, h, 12);
+  ctx.fillStyle = '#fdf6e6'; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = p>0 ? `rgba(255,180,40,${0.5+0.5*p})` : 'rgba(150,110,70,.5)'; ctx.stroke();
+  // header
+  ctx.textAlign='center';
+  ctx.fillStyle = '#d23b2a'; ctx.font = '800 22px "Trebuchet MS"';
+  ctx.fillText('To-Go Order', 0, -h/2 + 26);
+  ctx.strokeStyle='rgba(200,150,110,.5)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(-w/2+16,-h/2+34); ctx.lineTo(w/2-16,-h/2+34); ctx.stroke();
+  // target drink
+  ctx.save();
+  ctx.translate(-44, 10);
+  const sgl = 34 / TIERS[order.tier].r;
+  ctx.scale(sgl, sgl);
+  drawDrink({ x:0, y:0, r:TIERS[order.tier].r, tier:order.tier, pop:0, age:1, phase:0, wob:0, id:0 }, true);
+  ctx.restore();
+  // reward
+  ctx.fillStyle = '#5a3a1c'; ctx.font = '700 14px "Trebuchet MS"';
+  ctx.fillText(TIERS[order.tier].name, 36, -4);
+  ctx.fillStyle = '#1f9b45'; ctx.font = '800 24px "Trebuchet MS"';
+  ctx.fillText('+' + order.reward, 36, 26);
+  ctx.fillStyle = '#9a7a52'; ctx.font = '600 11px "Trebuchet MS"';
+  ctx.fillText('tip', 36, 42);
+  ctx.restore();
+}
+
+// ---------- HUD ----------
+function drawHUD(){
+  // score (top-left card)
+  drawCard(70, 82, 116, 80);
+  ctx.textAlign='center';
+  ctx.fillStyle='#ffd9a0'; ctx.font='700 12px "Trebuchet MS"';
+  ctx.fillText('SCORE', 70, 64);
+  ctx.fillStyle='#fff'; ctx.font='800 30px "Trebuchet MS"';
+  ctx.shadowColor='rgba(0,0,0,.4)'; ctx.shadowBlur=5;
+  ctx.fillText(String(score), 70, 96); ctx.shadowBlur=0;
+  ctx.fillStyle='#ffd9a0'; ctx.font='700 11px "Trebuchet MS"';
+  ctx.fillText('BEST ' + Math.max(best, score), 70, 114);
+
+  // next-2 queue (top-right card)
+  drawCard(VW-78, 82, 122, 80);
+  ctx.fillStyle='#ffd9a0'; ctx.font='700 12px "Trebuchet MS"';
+  ctx.fillText('NEXT', VW-78, 56);
+  const n0 = queue[0], n1 = queue[1];
+  const sa = 30 / TIERS[n0].r;
+  ctx.save(); ctx.translate(VW-98, 94); ctx.scale(sa,sa);
+  drawDrink({ x:0, y:0, r:TIERS[n0].r, tier:n0, pop:0, age:1, phase:0, wob:0, id:0 }, true);
+  ctx.restore();
+  ctx.strokeStyle='rgba(255,225,180,.25)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(VW-66, 70); ctx.lineTo(VW-66, 112); ctx.stroke();
+  const sb = 21 / TIERS[n1].r;
+  ctx.save(); ctx.translate(VW-46, 98); ctx.scale(sb,sb); ctx.globalAlpha=0.9;
+  drawDrink({ x:0, y:0, r:TIERS[n1].r, tier:n1, pop:0, age:1, phase:0, wob:0, id:0 }, true);
+  ctx.globalAlpha=1; ctx.restore();
+
+  // combo flag
+  if (combo > 1 && comboT > 0){
+    ctx.save();
+    ctx.translate(VW/2, 150);
+    const k = Math.min(1, comboT*1.5);
+    ctx.globalAlpha = k;
+    ctx.scale(1 + (1-k)*0.4, 1 + (1-k)*0.4);
+    ctx.fillStyle = '#FFD23F'; ctx.font = '900 30px "Trebuchet MS"';
+    ctx.textAlign='center';
+    ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(120,40,0,.6)';
+    ctx.strokeText('COMBO x' + combo, 0, 0);
+    ctx.fillText('COMBO x' + combo, 0, 0);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    const cw = 122, k2 = Math.max(0, comboT / 1.4);
+    ctx.fillStyle = 'rgba(0,0,0,.32)'; roundRect(VW/2 - cw/2, 168, cw, 7, 3.5); ctx.fill();
+    ctx.fillStyle = '#FFD23F'; roundRect(VW/2 - cw/2, 168, cw * k2, 7, 3.5); ctx.fill();
+  }
+}
+
+function drawCard(cx, cy, w, h){
+  roundRect(cx-w/2, cy-h/2, w, h, 14);
+  ctx.fillStyle='rgba(50,30,14,.55)'; ctx.fill();
+  ctx.lineWidth=3; ctx.strokeStyle='rgba(255,225,180,.25)'; ctx.stroke();
+}
+
+// ---------- progression tray (bottom) ----------
+function drawProgression(){
+  const y = VH - 34;
+  const n = TIERS.length;
+  const span = fieldRight - fieldLeft - 10;
+  const gap = span / (n - 1);
+  ctx.textAlign='center';
+  for (let i=0;i<n;i++){
+    const x = fieldLeft + 5 + gap*i;
+    const unlocked = i <= bestTier;
+    if (i < n-1){
+      ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(x+11, y); ctx.lineTo(x+gap-11, y); ctx.stroke();
+    }
+    ctx.globalAlpha = unlocked ? 1 : 0.3;
+    const s = 16 / TIERS[i].r;
+    ctx.save(); ctx.translate(x, y); ctx.scale(s,s);
+    drawDrink({ x:0, y:0, r:TIERS[i].r, tier:i, pop:0, age:1, phase:0, wob:0, id:0 }, true);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ---------- aim guide + in-hand drink ----------
+function drawAimAndHand(){
+  if (state !== 'play') return;
+  clampAim();
+  const r = TIERS[current].r;
+  const ty = aimTarget();
+  ctx.save();
+  ctx.setLineDash([9,13]); ctx.lineWidth=4; ctx.lineCap='round';
+  ctx.strokeStyle = cooldown>0 ? 'rgba(255,255,255,.16)' : 'rgba(255,255,255,.55)';
+  ctx.beginPath(); ctx.moveTo(aimX, launchY - r); ctx.lineTo(aimX, ty + r*0.4); ctx.stroke();
+  ctx.restore();
+  // ghost landing spot
+  ctx.globalAlpha = 0.28;
+  drawDrink({ x:aimX, y:ty, r, tier:current, pop:0, age:1, phase:0, wob:0, id:0 }, true);
+  ctx.globalAlpha = 1;
+  // in hand
+  drawDrink({ x:aimX, y:launchY, r, tier:current, pop:0, age:1, phase:T*1.2, wob:0, id:-1 }, false);
+}
+
+function drawFX(){
+  for (const r of rings){
+    ctx.globalAlpha = Math.max(0, r.life*1.6);
+    ctx.strokeStyle = r.col || '#fff'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, Math.PI*2); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  for (const p of particles){
+    ctx.globalAlpha = Math.max(0, Math.min(1, p.life*2));
+    ctx.fillStyle = p.col;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.textAlign='center';
+  for (const f of floaters){
+    ctx.globalAlpha = Math.max(0, Math.min(1, f.life*1.4));
+    ctx.fillStyle = f.col; ctx.font = `800 ${f.sz}px "Trebuchet MS"`;
+    ctx.lineWidth = 4; ctx.strokeStyle='rgba(0,0,0,.4)';
+    ctx.strokeText(f.txt, f.x, f.y); ctx.fillText(f.txt, f.x, f.y);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ====================================================================
+//  GLASS ART  — each tier is a real, distinct, animated cocktail glass
+// ====================================================================
+function drawDrink(c, flat){
+  const { tier, r } = c;
+  const t = TIERS[tier];
+  const pop = c.pop || 0;
+  const wob = c.wob || 0;
+  const ph = c.phase || 0;
+  // pop scale on merge + tiny idle bob
+  const sc = 1 + Math.sin(Math.min(1,pop) * Math.PI) * 0.22;
+  const bob = flat ? 0 : Math.sin(T*2 + ph) * 1.1;
+  const tilt = (flat ? 0 : Math.sin(T*1.6 + ph) * 0.012) + Math.sin(wob*9) * wob * 0.04;
+
+  ctx.save();
+  ctx.translate(c.x, c.y + bob);
+  ctx.rotate(tilt);
+  ctx.scale(sc, sc);
+
+  if (!flat){
+    ctx.fillStyle = 'rgba(40,22,8,.26)';
+    ctx.beginPath(); ctx.ellipse(0, r*0.96, r*0.92, r*0.34, 0, 0, Math.PI*2); ctx.fill();
+  }
+
+  switch (t.shape){
+    case 'tumbler':   glassTumbler(t, r, ph); break;
+    case 'highball':  glassHighball(t, r, ph); break;
+    case 'hurricane': glassHurricane(t, r, ph); break;
+    case 'collins':   glassCollins(t, r, ph); break;
+    case 'martini':   glassMartini(t, r, ph); break;
+    case 'goblet':    glassGoblet(t, r, ph); break;
+    case 'margarita': glassMargarita(t, r, ph); break;
+    case 'tiki':      glassTiki(t, r, ph); break;
+  }
+
+  ctx.restore();
+}
+
+// ---- shared glass helpers (all operate in local glass space) ----
+function fillBody(path){
+  ctx.save(); ctx.clip(path);
+  // clear-glass tint
+  ctx.fillStyle = 'rgba(255,255,255,.16)';
+  ctx.fillRect(-200,-200,400,400);
+  ctx.restore();
+}
+function strokeGlass(path, r){
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(1.6, r*0.05);
+  ctx.strokeStyle = 'rgba(255,255,255,.5)';
+  ctx.stroke(path);
+}
+function liquidInto(path, t, r, leftX, rightX, surfaceY, bottomY, ph){
+  ctx.save(); ctx.clip(path);
+  const g = ctx.createLinearGradient(0, surfaceY, 0, bottomY);
+  g.addColorStop(0, t.c1); g.addColorStop(1, t.c2);
+  // body of liquid with a wavy surface
+  const amp = Math.max(1.4, r*0.05), k = 0.05;
+  ctx.beginPath();
+  ctx.moveTo(leftX, bottomY);
+  ctx.lineTo(leftX, surfaceY);
+  for (let x=leftX; x<=rightX; x+=5){
+    ctx.lineTo(x, surfaceY + Math.sin(x*k + T*2.6 + ph)*amp);
+  }
+  ctx.lineTo(rightX, bottomY);
+  ctx.closePath();
+  ctx.fillStyle = g; ctx.fill();
+  // surface sheen
+  ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.lineWidth = Math.max(1, r*0.035);
+  ctx.beginPath();
+  for (let x=leftX; x<=rightX; x+=5){
+    const y = surfaceY + Math.sin(x*k + T*2.6 + ph)*amp;
+    x===leftX ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  // ice cubes
+  ctx.fillStyle = 'rgba(255,255,255,.32)';
+  iceCube(-r*0.18, surfaceY + r*0.28, r*0.34, ph);
+  iceCube( r*0.20, surfaceY + r*0.52, r*0.28, ph+1.5);
+  // rising bubbles
+  ctx.fillStyle = 'rgba(255,255,255,.5)';
+  for (let i=0;i<4;i++){
+    const span = bottomY - surfaceY;
+    const by = bottomY - ((T*30 + i*span*0.45 + ph*20) % (span*0.95)) - 4;
+    const bx = Math.sin(i*2.1 + ph + by*0.05) * r*0.42;
+    ctx.beginPath(); ctx.arc(bx, by, r*0.045 + (i%2)*r*0.02, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+function iceCube(x, y, s, ph){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(Math.sin(T*1.5+ph)*0.12 + 0.2);
+  roundRect(-s/2, -s/2, s, s, s*0.22); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.25)';
+  roundRect(-s/2, -s/2, s*0.4, s*0.4, s*0.12); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.32)';
+  ctx.restore();
+}
+function gloss(x1, y1, x2, y2, w){
+  ctx.save();
+  ctx.lineCap='round'; ctx.lineWidth=w; ctx.strokeStyle='rgba(255,255,255,.55)';
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  ctx.restore();
+}
+function rimEllipse(cy, rx, ry){
+  ctx.beginPath(); ctx.ellipse(0, cy, rx, ry, 0, 0, Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,.22)'; ctx.fill();
+  ctx.lineWidth=Math.max(1.4,rx*0.06); ctx.strokeStyle='rgba(255,255,255,.6)'; ctx.stroke();
+}
+function stemFoot(topY, footY, r, halfTop){
+  ctx.fillStyle='rgba(255,255,255,.22)';
+  roundRect(-r*0.07, topY, r*0.14, footY-topY, r*0.06); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.4)';
+  ctx.fillRect(-r*0.06, topY, r*0.04, footY-topY);
+  ctx.beginPath(); ctx.ellipse(0, footY, r*0.5, r*0.14, 0, 0, Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,.26)'; ctx.fill();
+  ctx.lineWidth=Math.max(1.2,r*0.04); ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.stroke();
+}
+
+// ---- garnishes ----
+function citrusWheel(x, y, rr, fill, rind, ph){
+  ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(T*1.4+ph)*0.1);
+  ctx.beginPath(); ctx.arc(0,0,rr,0,Math.PI*2); ctx.fillStyle=rind; ctx.fill();
+  ctx.beginPath(); ctx.arc(0,0,rr*0.8,0,Math.PI*2); ctx.fillStyle=fill; ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.75)'; ctx.lineWidth=rr*0.08;
+  for (let i=0;i<7;i++){ ctx.beginPath(); ctx.moveTo(0,0);
+    ctx.lineTo(Math.cos(i/7*6.28)*rr*0.72, Math.sin(i/7*6.28)*rr*0.72); ctx.stroke(); }
+  ctx.restore();
+}
+function straw(x1,y1,x2,y2,col,r){
+  ctx.save(); ctx.lineCap='round';
+  ctx.lineWidth=r*0.12; ctx.strokeStyle=col;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  ctx.lineWidth=r*0.05; ctx.strokeStyle='rgba(255,255,255,.6)';
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo((x1+x2)/2,(y1+y2)/2); ctx.stroke();
+  ctx.restore();
+}
+function cherry(x, y, r, ph){
+  ctx.save(); ctx.translate(x,y);
+  ctx.strokeStyle='#7a3b12'; ctx.lineWidth=r*0.05; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(0,-r*0.05); ctx.quadraticCurveTo(r*0.18,-r*0.4, r*0.05,-r*0.55+Math.sin(T*2+ph)*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0,0,r*0.16,0,Math.PI*2);
+  const g=ctx.createRadialGradient(-r*0.05,-r*0.05,r*0.02,0,0,r*0.16);
+  g.addColorStop(0,'#ff5a5f'); g.addColorStop(1,'#c81d2e'); ctx.fillStyle=g; ctx.fill();
+  ctx.beginPath(); ctx.arc(-r*0.05,-r*0.05,r*0.05,0,Math.PI*2); ctx.fillStyle='rgba(255,255,255,.8)'; ctx.fill();
+  ctx.restore();
+}
+function umbrella(x, y, r, ph){
+  ctx.save(); ctx.translate(x,y); ctx.rotate(-0.25 + Math.sin(T*0.9+ph)*0.06);
+  ctx.strokeStyle='#8a5a2c'; ctx.lineWidth=r*0.035; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,r*0.8); ctx.stroke();
+  const cols=['#ff5a5f','#ffd23f','#46aeff','#69d873','#ff7dbe','#ffffff'];
+  const spin = T*0.6 + ph;
+  for (let i=0;i<8;i++){
+    ctx.beginPath(); ctx.moveTo(0,0);
+    ctx.arc(0,0,r*0.5, spin + i/8*6.28, spin + (i+1)/8*6.28);
+    ctx.closePath(); ctx.fillStyle=cols[i%cols.length]; ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(0,0,r*0.06,0,Math.PI*2); ctx.fillStyle='#5a3a1c'; ctx.fill();
+  ctx.restore();
+}
+function mintSprig(x, y, r, ph){
+  ctx.save(); ctx.translate(x,y);
+  for (let i=0;i<3;i++){
+    ctx.save(); ctx.rotate((i-1)*0.6 + Math.sin(T*1.8+ph+i)*0.08);
+    const g=ctx.createLinearGradient(0,0,0,-r*0.5);
+    g.addColorStop(0,'#2faa3e'); g.addColorStop(1,'#7ed957');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.ellipse(0,-r*0.28,r*0.13,r*0.28,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='rgba(20,90,30,.5)'; ctx.lineWidth=r*0.02;
+    ctx.beginPath(); ctx.moveTo(0,-r*0.04); ctx.lineTo(0,-r*0.5); ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+function flower(x, y, r, ph){
+  ctx.save(); ctx.translate(x,y); ctx.rotate(Math.sin(T*1.2+ph)*0.12);
+  for (let i=0;i<5;i++){ ctx.save(); ctx.rotate(i/5*6.28);
+    ctx.beginPath(); ctx.ellipse(0,-r*0.22,r*0.11,r*0.22,0,0,Math.PI*2);
+    ctx.fillStyle='#fff'; ctx.fill();
+    ctx.strokeStyle='rgba(255,210,150,.6)'; ctx.lineWidth=r*0.015; ctx.stroke();
+    ctx.restore(); }
+  ctx.beginPath(); ctx.arc(0,0,r*0.13,0,Math.PI*2); ctx.fillStyle='#ffd23f'; ctx.fill();
+  ctx.restore();
+}
+
+// ---- Tier 0: short tumbler ----
+function glassTumbler(t, r, ph){
+  const p = new Path2D();
+  const tw=r*0.86, bw=r*0.74, yT=-r*0.72, yB=r*0.80;
+  p.moveTo(-tw,yT); p.lineTo(tw,yT);
+  p.lineTo(bw, yB-r*0.12); p.quadraticCurveTo(bw,yB,bw-r*0.12,yB);
+  p.lineTo(-bw+r*0.12,yB); p.quadraticCurveTo(-bw,yB,-bw,yB-r*0.12);
+  p.closePath();
+  fillBody(p);
+  const surf = yT + (yB-yT)*(1-t.fill);
+  liquidInto(p, t, r, -tw, tw, surf, yB, ph);
+  strokeGlass(p, r);
+  rimEllipse(yT, tw, r*0.16);
+  gloss(-tw*0.7, yT+r*0.1, -bw*0.7, yB-r*0.15, r*0.10);
+  citrusWheel(r*0.5, yT-r*0.05, r*0.30, '#FFF3B0', '#F4C430', ph);
+}
+
+// ---- Tier 1: tall highball ----
+function glassHighball(t, r, ph){
+  const p = new Path2D();
+  const tw=r*0.60, bw=r*0.54, yT=-r*0.98, yB=r*0.86;
+  p.moveTo(-tw,yT); p.lineTo(tw,yT);
+  p.lineTo(bw,yB-r*0.1); p.quadraticCurveTo(bw,yB,bw-r*0.1,yB);
+  p.lineTo(-bw+r*0.1,yB); p.quadraticCurveTo(-bw,yB,-bw,yB-r*0.1);
+  p.closePath();
+  fillBody(p);
+  const surf = yT + (yB-yT)*(1-t.fill);
+  liquidInto(p, t, r, -tw, tw, surf, yB, ph);
+  strokeGlass(p, r);
+  rimEllipse(yT, tw, r*0.12);
+  gloss(-tw*0.6, yT+r*0.1, -bw*0.6, yB-r*0.15, r*0.09);
+  straw(r*0.18, yT-r*0.45, -r*0.05, surf+r*0.2, '#ff4d6d', r);
+  citrusWheel(-r*0.42, yT+r*0.02, r*0.26, '#FFE0A0', '#F4C430', ph);
+}
+
+// ---- Tier 2: curvy hurricane on a foot ----
+function glassHurricane(t, r, ph){
+  const p = new Path2D();
+  const yT=-r*0.95, yB=r*0.6;
+  p.moveTo(-r*0.62, yT);
+  p.bezierCurveTo(-r*0.78, yT+r*0.2, -r*0.34, yT+r*0.55, -r*0.34, 0);
+  p.bezierCurveTo(-r*0.34, r*0.32, -r*0.6, r*0.45, -r*0.5, yB);
+  p.lineTo(r*0.5, yB);
+  p.bezierCurveTo(r*0.6, r*0.45, r*0.34, r*0.32, r*0.34, 0);
+  p.bezierCurveTo(r*0.34, yT+r*0.55, r*0.78, yT+r*0.2, r*0.62, yT);
+  p.closePath();
+  fillBody(p);
+  const surf = yT + (yB-yT)*(1-t.fill) + r*0.1;
+  liquidInto(p, t, r, -r*0.7, r*0.7, surf, yB, ph);
+  strokeGlass(p, r);
+  rimEllipse(yT, r*0.62, r*0.14);
+  stemFoot(yB, r*0.92, r, r*0.5);
+  gloss(-r*0.44, yT+r*0.2, -r*0.36, yB-r*0.1, r*0.09);
+  straw(r*0.15, yT-r*0.5, -r*0.05, surf+r*0.2, '#ffb14c', r);
+  citrusWheel(r*0.5, yT-r*0.02, r*0.30, '#FFD9A0', '#FF8C32', ph);
+  cherry(-r*0.4, yT+r*0.02, r, ph);
+}
+
+// ---- Tier 3: frosted collins with mint ----
+function glassCollins(t, r, ph){
+  const p = new Path2D();
+  const tw=r*0.64, bw=r*0.58, yT=-r*0.96, yB=r*0.88;
+  p.moveTo(-tw,yT); p.lineTo(tw,yT);
+  p.lineTo(bw,yB-r*0.1); p.quadraticCurveTo(bw,yB,bw-r*0.1,yB);
+  p.lineTo(-bw+r*0.1,yB); p.quadraticCurveTo(-bw,yB,-bw,yB-r*0.1);
+  p.closePath();
+  fillBody(p);
+  const surf = yT + (yB-yT)*(1-t.fill);
+  liquidInto(p, t, r, -tw, tw, surf, yB, ph);
+  ctx.save(); ctx.clip(p);
+  ctx.strokeStyle='rgba(255,255,255,.18)'; ctx.lineWidth=r*0.05;
+  for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.moveTo(i*r*0.22, surf+r*0.1); ctx.lineTo(i*r*0.22, yB); ctx.stroke(); }
+  ctx.restore();
+  strokeGlass(p, r);
+  rimEllipse(yT, tw, r*0.13);
+  gloss(-tw*0.6, yT+r*0.1, -bw*0.6, yB-r*0.15, r*0.09);
+  straw(-r*0.2, yT-r*0.5, r*0.05, surf+r*0.2, '#1e90ff', r);
+  mintSprig(r*0.22, yT-r*0.02, r, ph);
+  citrusWheel(-r*0.4, yT+r*0.06, r*0.24, '#D7F59A', '#5BBF3A', ph);
+}
+
+// ---- Tier 4: martini ----
+function glassMartini(t, r, ph){
+  const p = new Path2D();
+  const yT=-r*0.86, yMid=r*0.16;
+  p.moveTo(-r*0.96,yT);
+  p.lineTo(r*0.96,yT);
+  p.lineTo(r*0.06,yMid);
+  p.lineTo(-r*0.06,yMid);
+  p.closePath();
+  fillBody(p);
+  const surf = yT + (yMid-yT)*(1-t.fill);
+  ctx.save(); ctx.clip(p);
+  const g=ctx.createLinearGradient(0,surf,0,yMid);
+  g.addColorStop(0,t.c1); g.addColorStop(1,t.c2);
+  const amp=Math.max(1.2,r*0.04);
+  ctx.beginPath(); ctx.moveTo(-r,yMid);
+  for(let x=-r; x<=r; x+=5) ctx.lineTo(x, surf + Math.sin(x*0.05+T*2.6+ph)*amp);
+  ctx.lineTo(r,yMid); ctx.closePath(); ctx.fillStyle=g; ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.4)'; ctx.lineWidth=r*0.03;
+  ctx.beginPath();
+  for(let x=-r*0.9; x<=r*0.9; x+=5){ const y=surf+Math.sin(x*0.05+T*2.6+ph)*amp; x===-r*0.9?ctx.moveTo(x,y):ctx.lineTo(x,y);} ctx.stroke();
+  ctx.restore();
+  strokeGlass(p, r);
+  ctx.beginPath(); ctx.moveTo(-r*0.96,yT); ctx.lineTo(r*0.96,yT);
+  ctx.lineWidth=r*0.06; ctx.strokeStyle='rgba(255,255,255,.6)'; ctx.stroke();
+  stemFoot(yMid, r*0.9, r, r*0.5);
+  gloss(-r*0.5, yT+r*0.08, -r*0.04, yMid-r*0.04, r*0.08);
+  ctx.save(); ctx.rotate(0.3);
+  ctx.strokeStyle='rgba(220,230,255,.8)'; ctx.lineWidth=r*0.03;
+  ctx.beginPath(); ctx.moveTo(r*0.1,-r*1.0); ctx.lineTo(-r*0.1,surf+r*0.1); ctx.stroke();
+  ctx.restore();
+  cherry(-r*0.12, surf+r*0.02, r, ph);
+  umbrella(r*0.46, yT-r*0.1, r, ph);
+}
+
+// ---- Tier 5: wine goblet ----
+function glassGoblet(t, r, ph){
+  const p = new Path2D();
+  const yT=-r*0.84, yB=r*0.34;
+  p.moveTo(-r*0.7, yT);
+  p.bezierCurveTo(-r*0.86, yT+r*0.5, -r*0.66, yB, 0, yB);
+  p.bezierCurveTo(r*0.66, yB, r*0.86, yT+r*0.5, r*0.7, yT);
+  p.closePath();
+  fillBody(p);
+  const surf = yT + (yB-yT)*(1-t.fill);
+  liquidInto(p, t, r, -r*0.8, r*0.8, surf, yB, ph);
+  strokeGlass(p, r);
+  rimEllipse(yT, r*0.7, r*0.16);
+  stemFoot(yB, r*0.9, r, r*0.5);
+  gloss(-r*0.52, yT+r*0.16, -r*0.34, yB-r*0.08, r*0.10);
+  umbrella(r*0.4, yT-r*0.18, r, ph);
+  straw(-r*0.2, yT-r*0.55, r*0.05, surf+r*0.2, '#B98BFF', r);
+}
+
+// ---- Tier 6: margarita coupe ----
+function glassMargarita(t, r, ph){
+  const p = new Path2D();
+  const yR=-r*0.5, yStep=-r*0.18, yPt=r*0.2;
+  p.moveTo(-r*1.0, yR);
+  p.lineTo(-r*0.5, yStep);
+  p.lineTo(-r*0.06, yPt);
+  p.lineTo(r*0.06, yPt);
+  p.lineTo(r*0.5, yStep);
+  p.lineTo(r*1.0, yR);
+  p.quadraticCurveTo(0, yR-r*0.16, -r*1.0, yR);
+  p.closePath();
+  fillBody(p);
+  const surf = yR + (yPt-yR)*(1-t.fill) + r*0.04;
+  ctx.save(); ctx.clip(p);
+  const g=ctx.createLinearGradient(0,surf,0,yPt);
+  g.addColorStop(0,t.c1); g.addColorStop(1,t.c2);
+  const amp=Math.max(1.4,r*0.045);
+  ctx.beginPath(); ctx.moveTo(-r,yPt+r*0.3);
+  for(let x=-r; x<=r; x+=5) ctx.lineTo(x, surf+Math.sin(x*0.05+T*2.6+ph)*amp);
+  ctx.lineTo(r,yPt+r*0.3); ctx.closePath(); ctx.fillStyle=g; ctx.fill();
+  ctx.restore();
+  strokeGlass(p, r);
+  ctx.save();
+  ctx.fillStyle='rgba(255,255,255,.7)';
+  for(let i=0;i<22;i++){ const x=-r+ i*(2*r/21);
+    ctx.beginPath(); ctx.arc(x, yR-r*0.02+Math.sin(i)*r*0.02, r*0.03, 0, Math.PI*2); ctx.fill(); }
+  ctx.restore();
+  rimEllipse(yR-r*0.02, r*1.0, r*0.16);
+  stemFoot(yPt, r*0.94, r, r*0.5);
+  gloss(-r*0.7, yR+r*0.04, -r*0.1, yPt-r*0.04, r*0.09);
+  flower(-r*0.5, yR-r*0.05, r, ph);
+  cherry(r*0.4, yR-r*0.02, r, ph);
+  umbrella(r*0.2, yR-r*0.4, r, ph);
+}
+
+// ---- Tier 7: carved tiki mug (the trophy) ----
+function glassTiki(t, r, ph){
+  const p = new Path2D();
+  const tw=r*0.72, bw=r*0.6, yT=-r*0.8, yB=r*0.86;
+  p.moveTo(-tw,yT);
+  p.quadraticCurveTo(-tw-r*0.06, 0, -bw, yB);
+  p.lineTo(bw, yB);
+  p.quadraticCurveTo(tw+r*0.06, 0, tw, yT);
+  p.quadraticCurveTo(0, yT-r*0.14, -tw, yT);
+  p.closePath();
+  ctx.save(); ctx.clip(p);
+  const bg=ctx.createLinearGradient(-tw,0,tw,0);
+  bg.addColorStop(0,'#a9612e'); bg.addColorStop(0.5,'#c9803f'); bg.addColorStop(1,'#8a4d24');
+  ctx.fillStyle=bg; ctx.fillRect(-r,yT-r,2*r,2.4*r);
+  ctx.restore();
+  const surf=yT+r*0.06;
+  ctx.save(); ctx.clip(p);
+  const g=ctx.createLinearGradient(0,surf,0,surf+r*0.5);
+  g.addColorStop(0,t.c1); g.addColorStop(1,t.c2);
+  ctx.beginPath(); ctx.ellipse(0,surf,tw*0.9,r*0.16,0,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+  ctx.restore();
+  ctx.save(); ctx.clip(p);
+  ctx.strokeStyle='rgba(60,34,12,.55)'; ctx.lineWidth=r*0.05; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-tw*0.7, -r*0.1); ctx.lineTo(-r*0.1,-r*0.22);
+  ctx.moveTo(tw*0.7,-r*0.1); ctx.lineTo(r*0.1,-r*0.22); ctx.stroke();
+  ctx.fillStyle='rgba(40,22,8,.6)';
+  ctx.beginPath(); ctx.ellipse(-r*0.34,r*0.04,r*0.16,r*0.12,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(r*0.34,r*0.04,r*0.16,r*0.12,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(255,240,210,.85)';
+  ctx.beginPath(); ctx.arc(-r*0.34,r*0.04,r*0.05,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(r*0.34,r*0.04,r*0.05,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='rgba(60,34,12,.55)';
+  ctx.beginPath(); ctx.moveTo(0,r*0.1); ctx.lineTo(-r*0.1,r*0.34); ctx.lineTo(r*0.1,r*0.34); ctx.closePath(); ctx.stroke();
+  ctx.fillStyle='rgba(255,240,210,.8)';
+  roundRect(-r*0.36, r*0.46, r*0.72, r*0.18, r*0.04); ctx.fill();
+  ctx.strokeStyle='rgba(60,34,12,.5)'; ctx.lineWidth=r*0.03;
+  for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.moveTo(i*r*0.14, r*0.46); ctx.lineTo(i*r*0.14, r*0.64); ctx.stroke(); }
+  ctx.restore();
+  strokeGlass(p, r);
+  rimEllipse(yT, tw, r*0.16);
+  umbrella(-r*0.34, yT-r*0.34, r, ph);
+  straw(r*0.3, yT-r*0.7, -r*0.05, surf+r*0.05, '#ff4d6d', r);
+  citrusWheel(r*0.42, yT-r*0.1, r*0.28, '#FFF3B0', '#F4C430', ph);
+  cherry(r*0.05, yT-r*0.05, r, ph);
+  mintSprig(-r*0.05, yT-r*0.08, r*0.8, ph+2);
+}
+
+// ====================================================================
+//  Main loop
+// ====================================================================
+function drawFlash(){
+  if (flash <= 0) return;
+  ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.globalAlpha = Math.min(0.6, flash);
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.restore(); ctx.globalAlpha = 1;
+}
+function drawPausedOverlay(){
+  if (!paused) return;
+  ctx.fillStyle = 'rgba(20,12,6,.55)'; ctx.fillRect(0, 0, VW, VH);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd23f'; ctx.font = '900 46px "Trebuchet MS"';
+  ctx.fillText('PAUSED', VW/2, VH/2);
+  ctx.fillStyle = '#ffe9c7'; ctx.font = '600 18px "Trebuchet MS"';
+  ctx.fillText('tap the play button to resume', VW/2, VH/2 + 36);
+}
+
+let last = performance.now(), acc = 0;
+const FDT = 1/60;
+function loop(now){
+  let dt = (now - last) / 1000; last = now;
+  if (dt > 0.05) dt = 0.05;
+  T += dt;
+  if (state === 'play' && !paused){
+    acc += dt;
+    let guard = 0;
+    while (acc >= FDT && guard < 5){ step(FDT); acc -= FDT; guard++; }
+    if (acc > FDT) acc = 0;
+  }
+  stepFX(dt);
+
+  frameTransform();
+  drawBackground();
+  drawOrderSign();
+  const sorted = cocktails.slice().sort((a,b) => a.y - b.y);
+  for (const c of sorted) drawDrink(c, false);
+  drawAimAndHand();
+  drawFX();
+  drawHUD();
+  drawProgression();
+  drawPausedOverlay();
+  drawFlash();
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ====================================================================
+//  Input
+// ====================================================================
+function toVirtualX(clientX){
+  return (clientX - cv.getBoundingClientRect().left - offX) / scale;
+}
+let pointerDown = false;
+function onMove(e){
+  const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+  aimX = toVirtualX(cx); clampAim();
+}
+cv.addEventListener('pointermove', e => { if (pointerDown) onMove(e); });
+cv.addEventListener('pointerdown', e => { pointerDown = true; onMove(e); });
+cv.addEventListener('pointerup', e => {
+  if (pointerDown){ onMove(e); launch(); }
+  pointerDown = false;
+});
+cv.addEventListener('pointercancel', () => { pointerDown = false; });
+
+window.addEventListener('keydown', e => {
+  if (state !== 'play') return;
+  if (e.key === 'ArrowLeft'){ aimX -= 24; clampAim(); }
+  else if (e.key === 'ArrowRight'){ aimX += 24; clampAim(); }
+  else if (e.key === ' ' || e.key === 'ArrowUp'){ e.preventDefault(); launch(); }
+});
+
+// ====================================================================
+//  Audio (tiny WebAudio blips)
+// ====================================================================
+let actx = null, muted = false;
+function initAudio(){
+  if (!actx){ try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} }
+  if (actx && actx.state === 'suspended') actx.resume();
+}
+function blip(freq, dur, type, vol){
+  if (muted || !actx) return;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.value = freq;
+  o.connect(g); g.connect(actx.destination);
+  const t = actx.currentTime;
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.frequency.exponentialRampToValueAtTime(freq*0.9, t + dur);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+function launchSound(){ blip(200, 0.08, 'sine', 0.10); blip(120, 0.12, 'sine', 0.08); }
+function clinkSound(){ if (!actx) return; blip(880 + Math.random()*220, 0.05, 'triangle', 0.05); blip(1320, 0.04, 'sine', 0.03); }
+function mergeSound(tier){ blip(300 + tier*70, 0.16, 'triangle', 0.22); blip(460 + tier*90, 0.12, 'sine', 0.10); }
+function orderSound(){ blip(520,0.10,'square',0.16); setTimeout(()=>blip(780,0.16,'triangle',0.16),70); }
+function bigSound(){ blip(220,0.18,'square',0.18); setTimeout(()=>blip(440,0.22,'triangle',0.18),60); setTimeout(()=>blip(660,0.3,'sine',0.16),140); }
+function overSound(){ blip(260,0.4,'sawtooth',0.18); setTimeout(()=>blip(150,0.5,'sawtooth',0.18),120); }
+
+const muteBtn = document.getElementById('mute');
+muteBtn.addEventListener('click', () => {
+  muted = !muted;
+  muteBtn.textContent = muted ? '🔇' : '🔊';
+});
+const pauseBtn = document.getElementById('pause');
+pauseBtn.addEventListener('click', () => {
+  if (state !== 'play') return;
+  paused = !paused;
+  pauseBtn.textContent = paused ? '▶' : '⏸';
+});
+const swapBtn = document.getElementById('swap');
+swapBtn.addEventListener('click', () => { initAudio(); swapDrink(); });
+
+// ====================================================================
+//  Overlays / menu
+// ====================================================================
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('startBtn');
+const legend = document.getElementById('legend');
+
+TIERS.forEach((t,i) => {
+  if (i>5) return;
+  const c = document.createElement('div'); c.className='chip';
+  const d = document.createElement('span'); d.className='dot';
+  d.style.background = 'radial-gradient(circle at 30% 30%, ' + t.c1 + ', ' + t.c2 + ')';
+  c.appendChild(d);
+  c.appendChild(document.createTextNode(t.name));
+  legend.appendChild(c);
+});
+
+function gameOver(){
+  if (state === 'over') return;
+  state = 'over';
+  best = Math.max(best, score);
+  try { localStorage.setItem('tikiMergeBest', String(best)); } catch(e){}
+  overSound();
+  overlay.classList.remove('hidden');
+  overlay.querySelector('h1').innerHTML = 'Last Call! 🍸';
+  legend.innerHTML = '';
+  const sc = document.createElement('div'); sc.className='score';
+  sc.innerHTML = 'You scored <b>' + score + '</b><br><span style="font-size:.7em;opacity:.85">Best this session: ' + best + ' · Top drink: ' + TIERS[bestTier].name + '</span>';
+  legend.appendChild(sc);
+  overlay.querySelector('p').textContent = 'The glasses piled past the line! Wipe down the bar and pour another round.';
+  startBtn.textContent = 'Play Again';
+}
+
+startBtn.addEventListener('click', () => {
+  initAudio();
+  overlay.classList.add('hidden');
+  reset();
+});
+
+window.__game = { TIERS, reset, get cocktails(){ return cocktails; }, step, launch,
+                  setAim:(x)=>{aimX=x;}, get state(){return state;} };
+})();
+</script>
+</body>
+</html>
