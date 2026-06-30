@@ -1,5 +1,5 @@
 // Caches the whole arcade (hub + every game) for offline play after the first visit.
-const CACHE = 'tiki-arcade-v6';
+const CACHE = 'tiki-arcade-v7';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './icon-180.png', './icon-192.png', './icon-512.png',

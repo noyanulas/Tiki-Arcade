@@ -244,6 +244,7 @@ function gem(x,y,t,s,scale,alpha,seld){
   const m=(1-(scale||1))*cell*0.5, pad=cell*0.08;
   const X=x+pad+m,Y=y+pad+m,S=cell-pad*2-2*m,rad=S*0.26, cx=X+S/2,cy=Y+S/2;
   ctx.globalAlpha=alpha==null?1:alpha;
+  if(S<=1){ ctx.globalAlpha=1; return; }
   if(t<0||s==='rainbow'){ // rainbow
     const g=ctx.createLinearGradient(X,Y,X+S,Y+S); ['#ff5a5f','#ffd23f','#5fd06a','#46c6ff','#b07bff'].forEach((c,i,a)=>g.addColorStop(i/(a.length-1),c));
     ctx.fillStyle=g; rr(X,Y,S,S,rad); ctx.fill();
