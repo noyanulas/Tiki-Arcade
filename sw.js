@@ -1,12 +1,13 @@
 // Caches the whole arcade (hub + every game) for offline play after the first visit.
-const CACHE = 'tiki-arcade-v4';
+const CACHE = 'tiki-arcade-v6';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './icon-180.png', './icon-192.png', './icon-512.png',
   './merge/', './merge/index.html',
   './tycoon/', './tycoon/index.html',
   './blast/', './blast/index.html',
-  './crush/', './crush/index.html'
+  './crush/', './crush/index.html',
+  './notes.js', './notes/', './notes/index.html'
 ];
 self.addEventListener('install', (e) => {
   self.skipWaiting();

@@ -10,6 +10,7 @@
 <meta name="theme-color" content="#241810">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
+<script src="notes.js"></script>
 <title>Tiki Arcade</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;}
@@ -51,6 +52,7 @@
     { name:'Tiki Bar Tycoon', tag:'Build your tropical bar empire',       ic:'💰', href:'tycoon/' },
     { name:'Tiki Blast',      tag:'Drop blocks, clear lines, fill the grid',ic:'🎮', href:'blast/' },
     { name:'Tiki Crush',      tag:'Swap & match 3, chase big combos',       ic:'🍬', href:'crush/' },
+    { name:'Aşk Notları',     tag:'Oynadıkça açılan küçük notlar',          ic:'💌', href:'notes/' },
   ];
   const grid = document.getElementById('grid');
   for (const g of GAMES){
@@ -61,6 +63,7 @@
       '<div class="go">›</div>';
     grid.appendChild(a);
   }
+  try{ if(window.LoveNotes){ const cs=document.querySelectorAll('#grid .card'); const last=cs[cs.length-1]; if(last) last.querySelector('.tg').textContent=LoveNotes.unlockedCount()+' / '+LoveNotes.total()+' açıldı'; } }catch(e){}
   if ('serviceWorker' in navigator){
     window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); });
   }

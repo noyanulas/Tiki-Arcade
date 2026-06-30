@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Tiki Merge">
 <meta name="theme-color" content="#241810">
+<script src="../notes.js"></script>
 <title>Tiki Merge — Cocktail Bar</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -1300,7 +1301,7 @@ startBtn.addEventListener('click', () => {
 });
 
 window.__game = { TIERS, reset, get cocktails(){ return cocktails; }, step, launch,
-                  setAim:(x)=>{aimX=x;}, get state(){return state;} };
+                  setAim:(x)=>{aimX=x;}, get state(){return state;}, get score(){return score;}, get bestTier(){return bestTier;} };
 })();
 </script>
 </body>

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#241810">
+<title>Aşk Notları</title>
+<script src="../notes.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;}
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none;color:#fff;background:#160e07;
+    font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;overflow-y:auto;
+    padding:calc(env(safe-area-inset-top) + 60px) 18px calc(env(safe-area-inset-bottom) + 24px);
+    background:radial-gradient(130% 80% at 50% 0%,#5a2a3a 0%,#2a1614 55%,#160e07 100%);}
+  .title{font-size:clamp(30px,9vw,42px);font-weight:800;color:#ff9ad2;text-align:center;
+    text-shadow:0 3px 0 #9c2360,0 6px 14px rgba(0,0,0,.5);}
+  .sub{margin-top:6px;color:#ffe9c7;opacity:.9;font-size:15px;}
+  #list{width:100%;max-width:440px;margin-top:22px;display:flex;flex-direction:column;gap:12px;}
+  .note{border-radius:16px;padding:15px 17px;font-size:16px;line-height:1.5;
+    background:linear-gradient(180deg,#fff7e9,#ffe8c9);color:#5a3a1c;box-shadow:0 5px 14px rgba(0,0,0,.3);border:1px solid #ffd23f;}
+  .note .num{font-size:12px;font-weight:800;color:#d23b2a;opacity:.7;display:block;margin-bottom:4px;}
+  .locked{background:rgba(255,255,255,.06);color:#ffe9c7;border:1px dashed rgba(255,255,255,.18);text-align:center;opacity:.8;}
+  #back{position:fixed;left:12px;top:calc(12px + env(safe-area-inset-top));z-index:30;width:42px;height:42px;border-radius:50%;
+    border:none;cursor:pointer;font-size:24px;line-height:42px;text-align:center;background:rgba(0,0,0,.4);color:#fff;text-decoration:none;}
+  .foot{margin-top:18px;color:#ffffff66;font-size:12px;text-align:center;}
+</style>
+</head>
+<body>
+<a href="../" id="back" aria-label="Back to menu">‹</a>
+<div id="app">
+  <div class="title">💌 Aşk Notları</div>
+  <div class="sub" id="count">0 / 0 açıldı</div>
+  <div id="list"></div>
+  <div class="foot">Daha fazlası için oyunları oyna 🌺</div>
+</div>
+<script>
+  const LN = window.LoveNotes;
+  const notes = LN ? LN.all() : [];
+  const unlocked = LN ? LN.unlockedCount() : 0;
+  document.getElementById('count').textContent = unlocked + ' / ' + notes.length + ' açıldı';
+  const list = document.getElementById('list');
+  notes.forEach((t,i)=>{
+    const d=document.createElement('div');
+    if(i<unlocked){ d.className='note'; d.innerHTML='<span class="num">Not '+(i+1)+'</span>'; d.appendChild(document.createTextNode(t)); }
+    else { d.className='note locked'; d.textContent='🔒  Kilitli — oynamaya devam et'; }
+    list.appendChild(d);
+  });
+</script>
+</body>
+</html>
